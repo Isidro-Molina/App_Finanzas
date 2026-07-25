@@ -1,7 +1,3 @@
-// Este archivo es el schema principal de Prisma.
-// Define los modelos que se traducirán a tablas en PostgreSQL.
-// Se irá completando a medida que se definan los módulos.
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,40 +5,149 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
+// ==========================================
+// ENUMS
+// ==========================================
 
-// ─────────────────────────────────────────────
-// MÓDULO: Autenticación / Usuarios
-// ─────────────────────────────────────────────
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
 
+enum GroupMemberRole {
+  ADMIN
+  MEMBER
+}
+
+// ==========================================
+// USUARIOS
+// ==========================================
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
   name      String
-  avatar    String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt // ← Agregado para auditoría
 
-  // Relaciones (se completarán con cada módulo)
-  // transactions   Transaction[]
-  // budgets        Budget[]
-  // groupMembers   GroupMember[]
-
-  @@map("users")
+  // Relaciones
+  personalTransactions Transaction[]
+  categories           Category[]      // Categorías propias del usuario
+  budgets              Budget[]
+  groups               GroupMember[]
+  groupsCreated        Group[]         @relation("GroupCreator") // Grupos que fundó
+  expensesPaid         GroupExpense[]  @relation("PaidBy")
+  splitsOwed           ExpenseSplit[]
 }
 
-// ─────────────────────────────────────────────
-// TODO: Módulo de Finanzas Personales
-//   - Category
-//   - Transaction (gasto / ingreso)
-//   - Budget
-// ─────────────────────────────────────────────
+// ==========================================
+// MÓDULO 1: FINANZAS PERSONALES
+// ==========================================
 
-// ─────────────────────────────────────────────
-// TODO: Módulo de División de Gastos (Splitwise)
-//   - Group
-//   - GroupMember
-//   - GroupExpense
-//   - ExpenseSplit
-// ─────────────────────────────────────────────
+model Category {
+  id   String          @id @default(uuid())
+  name String          // Ej: "Supermercado", "Sueldo", "Salidas"
+  icon String?         // Emoji o nombre de ícono (ej: "🛒", "💼")
+  type TransactionType // ← Enum: INCOME o EXPENSE (antes era String libre)
+
+  // null = categoría global (seeded para todos), userId = categoría personal
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  transactions Transaction[]
+  budgets      Budget[]
+}
+
+model Transaction {
+  id          String          @id @default(uuid())
+  amount      Decimal         @db.Decimal(12, 2) // ← Decimal para cálculos exactos de dinero
+  description String?
+  type        TransactionType // Redundante con Category.type pero simplifica queries de balance
+  date        DateTime        @default(now())
+  createdAt   DateTime        @default(now())
+
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+}
+
+// Presupuesto mensual por categoría (ej: $50.000 en "Salidas" para Agosto 2025)
+model Budget {
+  id        String   @id @default(uuid())
+  amount    Decimal  @db.Decimal(12, 2) // Monto presupuestado
+  month     Int      // 1 = Enero ... 12 = Diciembre
+  year      Int
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  // Un solo presupuesto por usuario/categoría/mes/año
+  @@unique([userId, categoryId, month, year])
+}
+
+// ==========================================
+// MÓDULO 2: DIVISOR DE GASTOS (ESTILO SPLITWISE)
+// ==========================================
+
+model Group {
+  id        String   @id @default(uuid())
+  name      String   // Ej: "Asado Finde", "Viaje a Mendoza"
+  isSettled Boolean  @default(false) // true = grupo saldado/cerrado
+  createdAt DateTime @default(now())
+
+  createdById String
+  createdBy   User   @relation("GroupCreator", fields: [createdById], references: [id])
+
+  members  GroupMember[]
+  expenses GroupExpense[]
+}
+
+// Relación Muchos-a-Muchos entre Usuarios y Grupos
+model GroupMember {
+  userId   String
+  groupId  String
+  role     GroupMemberRole @default(MEMBER) // ← ADMIN puede cerrar el grupo, borrar gastos
+  joinedAt DateTime        @default(now())  // ← Para saber cuándo se unió
+
+  user  User  @relation(fields: [userId], references: [id])
+  group Group @relation(fields: [groupId], references: [id])
+
+  @@id([userId, groupId]) // Clave primaria compuesta
+}
+
+// El ticket o recibo general (Ej: Juan pagó $10.000 de asado)
+model GroupExpense {
+  id          String   @id @default(uuid())
+  description String   // Ej: "Carnicería"
+  amount      Decimal  @db.Decimal(12, 2) // ← Decimal
+  date        DateTime @default(now())
+
+  groupId  String
+  group    Group  @relation(fields: [groupId], references: [id])
+
+  paidById String
+  paidBy   User   @relation("PaidBy", fields: [paidById], references: [id])
+
+  splits ExpenseSplit[]
+}
+
+// Cómo se divide ese ticket (Ej: Pedro debe $2.500, María debe $2.500)
+model ExpenseSplit {
+  id         String  @id @default(uuid())
+  amountOwed Decimal @db.Decimal(12, 2) // ← Decimal
+  isPaid     Boolean @default(false)    // ← Para marcar pagos individuales dentro del grupo
+
+  groupExpenseId String
+  groupExpense   GroupExpense @relation(fields: [groupExpenseId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+}
