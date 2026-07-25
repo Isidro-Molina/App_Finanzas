@@ -1,0 +1,5 @@
+/* Archivo de entrada para NativeWind v4 */
+/* Las directivas de Tailwind generan las utilidades CSS */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

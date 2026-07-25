@@ -1,0 +1,48 @@
+// Este archivo es el schema principal de Prisma.
+// Define los modelos que se traducirán a tablas en PostgreSQL.
+// Se irá completando a medida que se definan los módulos.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+// ─────────────────────────────────────────────
+// MÓDULO: Autenticación / Usuarios
+// ─────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  avatar    String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relaciones (se completarán con cada módulo)
+  // transactions   Transaction[]
+  // budgets        Budget[]
+  // groupMembers   GroupMember[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// TODO: Módulo de Finanzas Personales
+//   - Category
+//   - Transaction (gasto / ingreso)
+//   - Budget
+// ─────────────────────────────────────────────
+
+// ─────────────────────────────────────────────
+// TODO: Módulo de División de Gastos (Splitwise)
+//   - Group
+//   - GroupMember
+//   - GroupExpense
+//   - ExpenseSplit
+// ─────────────────────────────────────────────
