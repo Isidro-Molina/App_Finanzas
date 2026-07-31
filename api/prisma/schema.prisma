@@ -26,11 +26,12 @@ enum GroupMemberRole {
 // USUARIOS
 // ==========================================
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt // ← Agregado para auditoría
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  passwordHash String   // Hash bcrypt — NUNCA exponer al cliente
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relaciones
   personalTransactions Transaction[]
