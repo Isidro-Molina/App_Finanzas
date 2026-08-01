@@ -1,6 +1,23 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
+import {
+  User,
+  Lock,
+  Mail,
+  Bell,
+  Fingerprint,
+  Moon,
+  Tag,
+  BarChart2,
+  HelpCircle,
+  Star,
+  FileText,
+  LogOut,
+  ChevronRight,
+} from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
 
 const Toggle = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
   <TouchableOpacity
@@ -32,92 +49,74 @@ const Toggle = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
   </TouchableOpacity>
 );
 
-const SectionTitle = ({ label }: { label: string }) => (
-  <Text
-    style={{
-      fontFamily: 'Inter_600SemiBold',
-      fontSize: 11,
-      color: '#94A3B8',
-      textTransform: 'uppercase',
-      letterSpacing: 0.8,
-      marginBottom: 8,
-      paddingHorizontal: 4,
-    }}
-  >
-    {label}
-  </Text>
-);
-
-const Row = ({
-  icon,
-  label,
-  right,
-  danger,
-  border = true,
-  onPress,
-}: {
-  icon: string;
-  label: string;
-  right?: React.ReactNode;
-  danger?: boolean;
-  border?: boolean;
-  onPress?: () => void;
-}) => (
-  <TouchableOpacity
-    activeOpacity={onPress ? 0.7 : 1}
-    onPress={onPress}
-    style={{
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      paddingVertical: 13,
-      paddingHorizontal: 16,
-      borderBottomWidth: border ? 1 : 0,
-      borderBottomColor: '#F1F5F9',
-    }}
-  >
-    <View
-      style={{
-        width: 34,
-        height: 34,
-        borderRadius: 10,
-        backgroundColor: danger ? '#FEF2F2' : '#EFF6FF',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <Text style={{ fontSize: 17 }}>{icon}</Text>
-    </View>
-    <Text
-      style={{
-        fontFamily: 'Inter_500Medium',
-        fontSize: 14,
-        color: danger ? '#EF4444' : '#0F172A',
-        flex: 1,
-      }}
-    >
-      {label}
-    </Text>
-    {right ?? <Text style={{ color: '#CBD5E1', fontSize: 18 }}>›</Text>}
-  </TouchableOpacity>
-);
-
 export const SettingsScreen = () => {
   const { user, logout } = useAuth();
-  
+  const { colors, isDark, toggleTheme } = useTheme();
+  const navigation = useNavigation<any>();
   const [notifications, setNotifications] = useState(true);
   const [biometrics, setBiometrics] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
-  const [currency, setCurrency] = useState('ARS');
-  const [budget, setBudget] = useState('5800');
+
+  const SectionTitle = ({ label }: { label: string }) => (
+    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8, paddingHorizontal: 4 }}>
+      {label}
+    </Text>
+  );
+
+  const Row = ({
+    icon: Icon,
+    label,
+    right,
+    danger = false,
+    border = true,
+    onPress,
+  }: {
+    icon: any;
+    label: string;
+    right?: React.ReactNode;
+    danger?: boolean;
+    border?: boolean;
+    onPress?: () => void;
+  }) => (
+    <TouchableOpacity
+      activeOpacity={onPress ? 0.7 : 1}
+      onPress={onPress}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingVertical: 13,
+        paddingHorizontal: 16,
+        borderBottomWidth: border ? 1 : 0,
+        borderBottomColor: colors.borderSubtle,
+      }}
+    >
+      <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: danger ? '#FEF2F2' : colors.bgSubtle, alignItems: 'center', justifyContent: 'center' }}>
+        <Icon size={17} color={danger ? '#EF4444' : colors.brand} />
+      </View>
+      <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: danger ? '#EF4444' : colors.textPrimary, flex: 1 }}>
+        {label}
+      </Text>
+      {right ?? <ChevronRight size={16} color={colors.textMuted} />}
+    </TouchableOpacity>
+  );
+
+  const cardStyle = {
+    backgroundColor: colors.bgCard,
+    borderRadius: 18,
+    shadowColor: '#000' as string,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: isDark ? 0.2 : 0.04,
+    shadowRadius: 16,
+    elevation: 2,
+  };
 
   return (
-    <View className="flex-1 bg-surface">
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-        
+
         {/* Header */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 52, paddingBottom: 20 }}>
-          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 22, color: '#0F172A' }}>
+        <View style={{ paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20 }}>
+          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 22, color: colors.textPrimary }}>
             Ajustes
           </Text>
         </View>
@@ -125,97 +124,55 @@ export const SettingsScreen = () => {
         {/* Cuenta */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
           <SectionTitle label="Cuenta" />
-          <View style={{ backgroundColor: '#fff', borderRadius: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 16, elevation: 2 }}>
-            <Row icon="👤" label="Editar perfil" />
-            <Row icon="🔐" label="Cambiar contraseña" />
-            <Row icon="📧" label="Email vinculado" right={<Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#94A3B8' }}>{user?.email || 'usuario@finova.app'}</Text>} border={false} />
-          </View>
-        </View>
-
-        {/* Presupuesto */}
-        <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
-          <SectionTitle label="Presupuesto Mensual" />
-          <View style={{ backgroundColor: '#fff', borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 16, elevation: 2 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 17 }}>💰</Text>
-              </View>
-              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: '#0F172A', flex: 1 }}>Límite mensual</Text>
-              
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F8FAFC', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1.5, borderColor: '#E2E8F0' }}>
-                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: '#64748B' }}>$</Text>
-                <TextInput
-                  value={budget}
-                  onChangeText={setBudget}
-                  keyboardType="numeric"
-                  style={{ width: 64, fontFamily: 'Outfit_700Bold', fontSize: 14, color: '#0F172A', textAlign: 'right', padding: 0 }}
-                />
-              </View>
-            </View>
-            
-            <View style={{ borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 10 }}>
-              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: '#94A3B8', marginBottom: 8 }}>Moneda</Text>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                {['ARS', 'USD', 'EUR'].map((c) => (
-                  <TouchableOpacity
-                    key={c}
-                    onPress={() => setCurrency(c)}
-                    style={{
-                      paddingVertical: 6,
-                      paddingHorizontal: 14,
-                      borderRadius: 8,
-                      borderWidth: 1.5,
-                      borderColor: currency === c ? '#2563EB' : '#E2E8F0',
-                      backgroundColor: currency === c ? '#EFF6FF' : '#fff',
-                    }}
-                  >
-                    <Text style={{ fontFamily: currency === c ? 'Inter_600SemiBold' : 'Inter_400Regular', fontSize: 13, color: currency === c ? '#2563EB' : '#64748B' }}>
-                      {c}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+          <View style={cardStyle}>
+            <Row icon={User} label="Editar perfil" />
+            <Row icon={Lock} label="Cambiar contraseña" />
+            <Row
+              icon={Mail}
+              label="Email vinculado"
+              right={<Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>{user?.email || 'usuario@finova.app'}</Text>}
+              border={false}
+            />
           </View>
         </View>
 
         {/* Preferencias */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
           <SectionTitle label="Preferencias" />
-          <View style={{ backgroundColor: '#fff', borderRadius: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 16, elevation: 2 }}>
-            <Row icon="🔔" label="Notificaciones" right={<Toggle on={notifications} onToggle={() => setNotifications(!notifications)} />} />
-            <Row icon="🔒" label="Face ID / Huella" right={<Toggle on={biometrics} onToggle={() => setBiometrics(!biometrics)} />} />
-            <Row icon="🌙" label="Modo oscuro" border={false} right={<Toggle on={darkMode} onToggle={() => setDarkMode(!darkMode)} />} />
+          <View style={cardStyle}>
+            <Row icon={Bell} label="Notificaciones" right={<Toggle on={notifications} onToggle={() => setNotifications(!notifications)} />} />
+            <Row icon={Fingerprint} label="Face ID / Huella" right={<Toggle on={biometrics} onToggle={() => setBiometrics(!biometrics)} />} />
+            <Row icon={Moon} label="Modo oscuro" border={false} right={<Toggle on={isDark} onToggle={toggleTheme} />} />
           </View>
         </View>
 
         {/* Categorías */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
           <SectionTitle label="Categorías" />
-          <View style={{ backgroundColor: '#fff', borderRadius: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 16, elevation: 2 }}>
-            <Row icon="🏷️" label="Gestionar categorías" />
-            <Row icon="📊" label="Exportar datos (CSV)" border={false} />
+          <View style={cardStyle}>
+            <Row icon={Tag} label="Gestionar categorías" onPress={() => navigation.navigate('ManageCategories')} />
+            <Row icon={BarChart2} label="Exportar datos (CSV)" border={false} />
           </View>
         </View>
 
         {/* Soporte */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
           <SectionTitle label="Soporte" />
-          <View style={{ backgroundColor: '#fff', borderRadius: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 16, elevation: 2 }}>
-            <Row icon="❓" label="Centro de ayuda" />
-            <Row icon="⭐" label="Calificar la app" />
-            <Row icon="📄" label="Términos y privacidad" border={false} />
+          <View style={cardStyle}>
+            <Row icon={HelpCircle} label="Centro de ayuda" />
+            <Row icon={Star} label="Calificar la app" />
+            <Row icon={FileText} label="Términos y privacidad" border={false} />
           </View>
         </View>
 
         {/* Danger */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 24 }}>
-          <View style={{ backgroundColor: '#fff', borderRadius: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 16, elevation: 2 }}>
-            <Row icon="🚪" label="Cerrar sesión" danger border={false} onPress={logout} />
+          <View style={cardStyle}>
+            <Row icon={LogOut} label="Cerrar sesión" danger border={false} onPress={logout} />
           </View>
         </View>
 
-        <Text style={{ textAlign: 'center', fontFamily: 'Inter_400Regular', fontSize: 11, color: '#CBD5E1', marginBottom: 16 }}>
+        <Text style={{ textAlign: 'center', fontFamily: 'Inter_400Regular', fontSize: 11, color: colors.textMuted, marginBottom: 16 }}>
           Finova v1.0.0 · Hecho con ❤️ en Argentina
         </Text>
       </ScrollView>

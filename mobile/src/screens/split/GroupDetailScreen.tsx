@@ -9,29 +9,17 @@ import {
   TextInput,
   Alert,
   RefreshControl,
+  Pressable,
 } from 'react-native';
 import { useFocusEffect, useRoute, useNavigation } from '@react-navigation/native';
 import apiClient from '../../api/client';
-import { AddGroupExpenseScreen } from './AddGroupExpenseScreen';
-import {
-  ArrowLeft,
-  Plus,
-  UserPlus,
-  Receipt,
-  Scale,
-  ArrowRight,
-  CheckCircle2,
-  Users,
-} from 'lucide-react-native';
+import { ArrowLeft, UserPlus, Receipt, Scale, ArrowRight, CheckCircle2, Users, Plus, X } from 'lucide-react-native';
+import { useTheme } from '../../context/ThemeContext';
 
 interface Member {
   userId: string;
   role: string;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-  };
+  user: { id: string; name: string; email: string };
 }
 
 interface GroupDetail {
@@ -39,9 +27,7 @@ interface GroupDetail {
   name: string;
   isSettled: boolean;
   members: Member[];
-  createdBy: {
-    name: string;
-  };
+  createdBy: { name: string };
 }
 
 interface Expense {
@@ -49,10 +35,7 @@ interface Expense {
   description: string;
   amount: string;
   date: string;
-  paidBy: {
-    id: string;
-    name: string;
-  };
+  paidBy: { id: string; name: string };
 }
 
 interface DebtTransaction {
@@ -63,18 +46,17 @@ interface DebtTransaction {
 
 interface BalanceData {
   isSettled: boolean;
-  balances: Array<{
-    userId: string;
-    name: string;
-    net: number;
-  }>;
+  balances: Array<{ userId: string; name: string; net: number }>;
   transactions: DebtTransaction[];
 }
+
+const AVATAR_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
 
 export const GroupDetailScreen = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const { groupId } = route.params;
+  const { colors, isDark } = useTheme();
 
   const [group, setGroup] = useState<GroupDetail | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -82,8 +64,6 @@ export const GroupDetailScreen = () => {
   const [activeTab, setActiveTab] = useState<'EXPENSES' | 'BALANCE'>('EXPENSES');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
   const [memberEmail, setMemberEmail] = useState('');
   const [inviting, setInviting] = useState(false);
@@ -95,7 +75,6 @@ export const GroupDetailScreen = () => {
         apiClient.get(`/groups/${groupId}/expenses`),
         apiClient.get(`/groups/${groupId}/balance`),
       ]);
-
       setGroup(groupRes.data);
       setExpenses(expRes.data);
       setBalance(balRes.data);
@@ -107,18 +86,13 @@ export const GroupDetailScreen = () => {
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchData();
-    }, [groupId]),
-  );
+  useFocusEffect(useCallback(() => { fetchData(); }, [groupId]));
 
   const handleInviteMember = async () => {
     if (!memberEmail || !memberEmail.includes('@')) {
       Alert.alert('Email inválido', 'Ingresá un correo electrónico válido');
       return;
     }
-
     setInviting(true);
     try {
       await apiClient.post(`/groups/${groupId}/members`, { email: memberEmail.trim() });
@@ -136,227 +110,194 @@ export const GroupDetailScreen = () => {
 
   if (loading && !refreshing) {
     return (
-      <View className="flex-1 bg-surface-900 justify-center items-center">
-        <ActivityIndicator size="large" color="#38bdf8" />
+      <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={colors.brand} />
       </View>
     );
   }
 
+  const tabActive = { backgroundColor: colors.brand };
+  const tabInactive = { backgroundColor: 'transparent' };
+
   return (
-    <View className="flex-1 bg-surface-900 pt-12">
-      {/* Header Bar */}
-      <View className="flex-row items-center justify-between px-5 mb-4">
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+
+      {/* Header */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 52, paddingBottom: 16, gap: 12 }}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
-          className="w-10 h-10 rounded-full bg-surface-800 border border-slate-700 items-center justify-center"
+          style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
         >
-          <ArrowLeft size={20} color="#94a3b8" />
+          <ArrowLeft size={18} color={colors.textSecondary} />
         </TouchableOpacity>
-        <View className="items-center flex-1 mx-3">
-          <Text className="text-xl font-bold text-slate-100 numberOfLines={1}">
+
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: colors.textPrimary }} numberOfLines={1}>
             {group?.name}
           </Text>
-          <Text className="text-xs text-slate-400">
+          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>
             {group?.members.length} integrantes
           </Text>
         </View>
+
         <TouchableOpacity
           onPress={() => setIsAddMemberOpen(true)}
-          className="w-10 h-10 rounded-full bg-brand-500/20 border border-brand-500/40 items-center justify-center"
+          style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: colors.brandLight, borderWidth: 1, borderColor: `${colors.brand}30`, alignItems: 'center', justifyContent: 'center' }}
         >
-          <UserPlus size={18} color="#38bdf8" />
+          <UserPlus size={18} color={colors.brand} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => navigation.navigate('AddGroupExpense', { groupId })}
+          style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: colors.brand, alignItems: 'center', justifyContent: 'center', shadowColor: colors.brand, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 }}
+        >
+          <Plus size={18} color="#fff" />
         </TouchableOpacity>
       </View>
 
-      {/* Tabs Selector */}
-      <View className="flex-row px-5 mb-4">
-        <View className="flex-row flex-1 bg-surface-800 p-1.5 rounded-2xl border border-slate-700">
+      {/* Members avatars */}
+      {group && group.members.length > 0 && (
+        <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
+          <View style={{ backgroundColor: colors.bgCard, borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: isDark ? 0.2 : 0.04, shadowRadius: 8, elevation: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {group.members.slice(0, 5).map((m, i) => (
+                <View
+                  key={m.userId}
+                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: AVATAR_COLORS[i % AVATAR_COLORS.length], borderWidth: 2, borderColor: colors.bgCard, marginLeft: i > 0 ? -8 : 0, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#fff' }}>
+                    {m.user.name.slice(0, 1).toUpperCase()}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary, flex: 1 }}>
+              {group.members.map((m) => m.user.name.split(' ')[0]).join(', ')}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Tabs */}
+      <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
+        <View style={{ flexDirection: 'row', backgroundColor: colors.bgCard, padding: 5, borderRadius: 14, gap: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: isDark ? 0.2 : 0.04, shadowRadius: 4, elevation: 1 }}>
           <TouchableOpacity
             onPress={() => setActiveTab('EXPENSES')}
-            className={`flex-1 py-2.5 rounded-xl flex-row items-center justify-center ${
-              activeTab === 'EXPENSES' ? 'bg-brand-500' : ''
-            }`}
+            style={{ flex: 1, paddingVertical: 9, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, ...(activeTab === 'EXPENSES' ? tabActive : tabInactive) }}
           >
-            <Receipt
-              size={16}
-              color={activeTab === 'EXPENSES' ? '#0f172a' : '#94a3b8'}
-            />
-            <Text
-              className={`text-xs font-bold ml-2 ${
-                activeTab === 'EXPENSES' ? 'text-slate-950' : 'text-slate-400'
-              }`}
-            >
+            <Receipt size={15} color={activeTab === 'EXPENSES' ? '#fff' : colors.textMuted} />
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: activeTab === 'EXPENSES' ? '#fff' : colors.textMuted }}>
               Gastos ({expenses.length})
             </Text>
           </TouchableOpacity>
-
           <TouchableOpacity
             onPress={() => setActiveTab('BALANCE')}
-            className={`flex-1 py-2.5 rounded-xl flex-row items-center justify-center ${
-              activeTab === 'BALANCE' ? 'bg-brand-500' : ''
-            }`}
+            style={{ flex: 1, paddingVertical: 9, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, ...(activeTab === 'BALANCE' ? tabActive : tabInactive) }}
           >
-            <Scale
-              size={16}
-              color={activeTab === 'BALANCE' ? '#0f172a' : '#94a3b8'}
-            />
-            <Text
-              className={`text-xs font-bold ml-2 ${
-                activeTab === 'BALANCE' ? 'text-slate-950' : 'text-slate-400'
-              }`}
-            >
-              Saldos & Deudas
+            <Scale size={15} color={activeTab === 'BALANCE' ? '#fff' : colors.textMuted} />
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: activeTab === 'BALANCE' ? '#fff' : colors.textMuted }}>
+              Saldos
             </Text>
           </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView
-        className="flex-1 px-5"
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              fetchData();
-            }}
-            tintColor="#38bdf8"
-          />
-        }
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} tintColor={colors.brand} />}
       >
         {activeTab === 'EXPENSES' ? (
-          /* TAB DE GASTOS */
-          <View className="mb-24">
-            <View className="flex-row justify-between items-center mb-3">
-              <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Historial de Tickets
-              </Text>
-              <TouchableOpacity
-                onPress={() => navigation.navigate('AddGroupExpense', { groupId })}
-                className="bg-brand-500 px-3.5 py-2 rounded-full flex-row items-center shadow-lg shadow-brand-500/20"
-              >
-                <Plus size={16} color="#0f172a" />
-                <Text className="text-slate-950 font-bold text-xs ml-1">
-                  Cargar Gasto
-                </Text>
-              </TouchableOpacity>
-            </View>
-
+          <View style={{ gap: 8 }}>
             {expenses.length === 0 ? (
-              <View className="bg-surface-800/80 border border-slate-700/50 rounded-3xl p-8 items-center justify-center my-4">
-                <Receipt size={36} color="#64748b" />
-                <Text className="text-slate-300 font-semibold text-base mt-3">
-                  No hay gastos cargados
+              <View style={{ backgroundColor: colors.bgCard, borderRadius: 18, padding: 32, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: isDark ? 0.2 : 0.04, shadowRadius: 8, elevation: 1 }}>
+                <Receipt size={32} color={colors.textMuted} />
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: colors.textPrimary, marginTop: 12, marginBottom: 4 }}>
+                  Sin gastos aún
                 </Text>
-                <Text className="text-slate-400 text-xs text-center mt-1">
-                  Hacé clic en "+ Cargar Gasto" para agregar la primera compra del grupo.
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textMuted, textAlign: 'center' }}>
+                  Tocá el "+" para cargar el primer gasto del grupo.
                 </Text>
               </View>
             ) : (
               expenses.map((exp) => (
                 <View
                   key={exp.id}
-                  className="bg-surface-800/90 border border-slate-700/60 rounded-3xl p-4 mb-3"
+                  style={{ backgroundColor: colors.bgCard, borderRadius: 14, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: isDark ? 0.2 : 0.05, shadowRadius: 3, elevation: 1 }}
                 >
-                  <View className="flex-row justify-between items-start mb-1">
-                    <Text className="text-base font-bold text-slate-100 flex-1 mr-2">
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.textPrimary, flex: 1, marginRight: 12 }}>
                       {exp.description}
                     </Text>
-                    <Text className="text-lg font-bold text-brand-400">
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: colors.brand }}>
                       ${Number(exp.amount).toLocaleString('es-AR')}
                     </Text>
                   </View>
-                  <Text className="text-xs text-slate-400">
-                    Pagó <Text className="text-slate-200 font-medium">{exp.paidBy.name}</Text> •{' '}
-                    {new Date(exp.date).toLocaleDateString('es-AR', {
-                      day: '2-digit',
-                      month: 'short',
-                    })}
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>
+                    Pagó{' '}
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', color: colors.textSecondary }}>{exp.paidBy.name}</Text>
+                    {' · '}
+                    {new Date(exp.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
                   </Text>
                 </View>
               ))
             )}
           </View>
         ) : (
-          /* TAB DE SALDOS & ALGORITMO */
-          <View className="mb-24">
-            {/* Estado de Saldado */}
+          <View style={{ gap: 12 }}>
+            {/* Settled status */}
             {balance?.isSettled ? (
-              <View className="bg-emerald-500/10 border border-emerald-500/30 rounded-3xl p-6 items-center justify-center mb-5">
-                <CheckCircle2 size={40} color="#10b981" />
-                <Text className="text-emerald-400 font-bold text-lg mt-2">
-                  ¡El grupo está completamente saldado!
+              <View style={{ backgroundColor: '#ECFDF5', borderRadius: 18, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: '#A7F3D0' }}>
+                <CheckCircle2 size={36} color="#059669" />
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: '#059669', marginTop: 8, marginBottom: 4 }}>
+                  ¡Grupo completamente saldado!
                 </Text>
-                <Text className="text-slate-400 text-xs text-center mt-1">
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: '#065F46', textAlign: 'center' }}>
                   Nadie le debe nada a nadie en este momento.
                 </Text>
               </View>
             ) : (
-              /* Lista de transferencias mínimas sugeridas */
-              <View className="mb-6">
-                <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                  Transferencias sugeridas para saldar
+              <>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                  Transferencias sugeridas
                 </Text>
                 {balance?.transactions.map((tx, idx) => (
                   <View
                     key={idx}
-                    className="bg-surface-800/90 border border-slate-700/60 rounded-3xl p-4 mb-3 flex-row items-center justify-between"
+                    style={{ backgroundColor: colors.bgCard, borderRadius: 14, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: isDark ? 0.2 : 0.05, shadowRadius: 3, elevation: 1 }}
                   >
-                    <View className="flex-1 mr-2">
-                      <View className="flex-row items-center">
-                        <Text className="text-sm font-bold text-rose-400">
-                          {tx.from.name}
-                        </Text>
-                        <ArrowRight size={14} color="#94a3b8" className="mx-2" />
-                        <Text className="text-sm font-bold text-emerald-400">
-                          {tx.to.name}
-                        </Text>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.expense }}>{tx.from.name}</Text>
+                        <ArrowRight size={14} color={colors.textMuted} />
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.income }}>{tx.to.name}</Text>
                       </View>
-                      <Text className="text-xs text-slate-400 mt-1">
-                        Le debe transferir
-                      </Text>
+                      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>Le debe transferir</Text>
                     </View>
-                    <Text className="text-lg font-extrabold text-amber-400">
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: colors.textPrimary }}>
                       ${tx.amount.toLocaleString('es-AR')}
                     </Text>
                   </View>
                 ))}
-              </View>
+              </>
             )}
 
-            {/* Balances Individuales */}
-            <View className="bg-surface-800/80 border border-slate-700/50 rounded-3xl p-5">
-              <View className="flex-row items-center mb-3">
-                <Users size={16} color="#38bdf8" />
-                <Text className="text-xs font-semibold text-slate-300 uppercase tracking-wider ml-2">
+            {/* Individual balances */}
+            <View style={{ backgroundColor: colors.bgCard, borderRadius: 18, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: isDark ? 0.2 : 0.04, shadowRadius: 8, elevation: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <Users size={15} color={colors.brand} />
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 }}>
                   Saldos individuales
                 </Text>
               </View>
-
-              {balance?.balances.map((b) => {
+              {balance?.balances.map((b, i) => {
                 const isPositive = b.net > 0;
                 const isZero = b.net === 0;
-
                 return (
-                  <View
-                    key={b.userId}
-                    className="flex-row justify-between items-center py-2.5 border-b border-slate-700/30"
-                  >
-                    <Text className="text-sm font-medium text-slate-200">{b.name}</Text>
-                    <Text
-                      className={`text-sm font-bold ${
-                        isZero
-                          ? 'text-slate-400'
-                          : isPositive
-                          ? 'text-emerald-400'
-                          : 'text-rose-400'
-                      }`}
-                    >
-                      {isZero
-                        ? 'Saldado'
-                        : isPositive
-                        ? `Le deben +$${b.net.toLocaleString('es-AR')}`
-                        : `Debe -$${Math.abs(b.net).toLocaleString('es-AR')}`}
+                  <View key={b.userId} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: i < (balance.balances.length - 1) ? 1 : 0, borderBottomColor: colors.borderSubtle }}>
+                    <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: colors.textPrimary }}>{b.name}</Text>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, color: isZero ? colors.textMuted : isPositive ? colors.income : colors.expense }}>
+                      {isZero ? 'Saldado' : isPositive ? `Le deben +$${b.net.toLocaleString('es-AR')}` : `Debe -$${Math.abs(b.net).toLocaleString('es-AR')}`}
                     </Text>
                   </View>
                 );
@@ -366,55 +307,39 @@ export const GroupDetailScreen = () => {
         )}
       </ScrollView>
 
-      {/* Modal para Invitar Miembro */}
-      <Modal
-        visible={isAddMemberOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsAddMemberOpen(false)}
-      >
-        <View className="flex-1 bg-black/70 justify-center px-6">
-          <View className="bg-surface-800 border border-slate-700 rounded-3xl p-6">
-            <Text className="text-lg font-bold text-slate-100 mb-1">
-              Invitar al grupo
+      {/* Add Member Modal */}
+      <Modal visible={isAddMemberOpen} transparent animationType="fade" onRequestClose={() => setIsAddMemberOpen(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 24 }} onPress={() => setIsAddMemberOpen(false)}>
+          <Pressable style={{ backgroundColor: colors.bgCard, borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 10 }} onPress={() => {}}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: colors.textPrimary }}>Invitar al grupo</Text>
+              <TouchableOpacity onPress={() => setIsAddMemberOpen(false)}>
+                <X size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textMuted, marginBottom: 20 }}>
+              Ingresá el email con el que se registró.
             </Text>
-            <Text className="text-xs text-slate-400 mb-4">
-              Ingresá el correo electrónico con el que se registró la persona.
-            </Text>
-
             <TextInput
               value={memberEmail}
               onChangeText={setMemberEmail}
               placeholder="amigo@email.com"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={colors.textMuted}
               keyboardType="email-address"
               autoCapitalize="none"
-              style={{ color: '#f8fafc', backgroundColor: '#0f172a' }}
-              className="border border-slate-700 rounded-2xl px-4 py-3.5 text-base mb-6 font-medium"
+              autoFocus
+              style={{ borderWidth: 1.5, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, fontFamily: 'Inter_400Regular', color: colors.textPrimary, backgroundColor: colors.bgInput, marginBottom: 20 }}
             />
-
-            <View className="flex-row gap-3">
-              <TouchableOpacity
-                onPress={() => setIsAddMemberOpen(false)}
-                className="flex-1 py-3 bg-surface-900 border border-slate-700 rounded-xl items-center"
-              >
-                <Text className="text-slate-300 font-semibold">Cancelar</Text>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity onPress={() => setIsAddMemberOpen(false)} style={{ flex: 1, paddingVertical: 14, backgroundColor: colors.bgSubtle, borderRadius: 12, alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', color: colors.textSecondary }}>Cancelar</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={handleInviteMember}
-                disabled={inviting}
-                className="flex-1 py-3 bg-brand-500 rounded-xl items-center"
-              >
-                {inviting ? (
-                  <ActivityIndicator color="#0f172a" />
-                ) : (
-                  <Text className="text-slate-950 font-bold">Agregar</Text>
-                )}
+              <TouchableOpacity onPress={handleInviteMember} disabled={inviting} style={{ flex: 1, paddingVertical: 14, backgroundColor: colors.brand, borderRadius: 12, alignItems: 'center' }}>
+                {inviting ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#fff' }}>Agregar</Text>}
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </View>
   );

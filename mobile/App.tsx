@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { AuthProvider } from './src/context/AuthContext';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 
 import {
@@ -19,6 +20,20 @@ import {
   Outfit_700Bold,
   Outfit_800ExtraBold,
 } from '@expo-google-fonts/outfit';
+
+function AppInner() {
+  const { isDark } = useTheme();
+  return (
+    <SafeAreaProvider>
+      <AuthProvider>
+        <NavigationContainer>
+          <StatusBar style={isDark ? 'light' : 'dark'} />
+          <RootNavigator />
+        </NavigationContainer>
+      </AuthProvider>
+    </SafeAreaProvider>
+  );
+}
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -40,13 +55,8 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <NavigationContainer>
-          <StatusBar style="dark" />
-          <RootNavigator />
-        </NavigationContainer>
-      </AuthProvider>
-    </SafeAreaProvider>
+    <ThemeProvider>
+      <AppInner />
+    </ThemeProvider>
   );
 }

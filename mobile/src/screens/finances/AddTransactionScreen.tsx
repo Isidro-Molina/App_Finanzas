@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,28 +7,42 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import apiClient from '../../api/client';
+import { ArrowLeft, Calendar } from 'lucide-react-native';
+import { useTheme } from '../../context/ThemeContext';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 interface Category {
   id: string;
   name: string;
-  icon: string | null;
+  icon: string | null; // stores color hex
   type: 'INCOME' | 'EXPENSE';
+}
+
+function getCategoryColor(icon: string | null, index: number): string {
+  const palette = ['#2563EB', '#7C3AED', '#DB2777', '#059669', '#D97706', '#0891B2', '#DC2626', '#65A30D'];
+  if (icon && icon.startsWith('#')) return icon;
+  return palette[index % palette.length];
 }
 
 export const AddTransactionScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const { colors } = useTheme();
 
   const [type, setType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchingCategories, setFetchingCategories] = useState(true);
+
+  const formattedDate = selectedDate.toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
 
   useFocusEffect(
     React.useCallback(() => {
@@ -70,9 +84,7 @@ export const AddTransactionScreen: React.FC = () => {
         type,
         categoryId: selectedCategoryId,
         description: description.trim() || undefined,
-        // Backend might not support setting date explicitly unless it's in DTO, 
-        // but we'll include it in case it does or for future use.
-        // date: date + 'T00:00:00Z', 
+        date: selectedDate.toISOString(),
       });
       navigation.goBack();
     } catch (e: any) {
@@ -83,218 +95,175 @@ export const AddTransactionScreen: React.FC = () => {
     }
   };
 
+  const cardStyle = {
+    backgroundColor: colors.bgCard,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 20,
+    shadowColor: '#000' as string,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    elevation: 2,
+  };
+
   return (
-    <View className="flex-1 bg-surface">
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 52, paddingBottom: 16, gap: 12 }}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
-          style={{
-            width: 38,
-            height: 38,
-            borderRadius: 12,
-            backgroundColor: '#fff',
-            borderWidth: 1,
-            borderColor: '#E2E8F0',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
+          style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
         >
-          <Text style={{ fontSize: 16 }}>←</Text>
+          <ArrowLeft size={18} color={colors.textSecondary} />
         </TouchableOpacity>
-        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: '#0F172A' }}>
-          Agregar Gasto / Ingreso
+        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: colors.textPrimary }}>
+          Nueva Transacción
         </Text>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-        
+
         {/* Type Selector */}
-        <View style={{ marginHorizontal: 20, marginBottom: 16, flexDirection: 'row', backgroundColor: '#fff', padding: 6, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
+        <View style={{ marginHorizontal: 20, marginBottom: 16, flexDirection: 'row', backgroundColor: colors.bgCard, padding: 6, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
           <TouchableOpacity
             onPress={() => { setType('EXPENSE'); setSelectedCategoryId(null); }}
             style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12, backgroundColor: type === 'EXPENSE' ? '#EFF6FF' : 'transparent' }}
           >
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: type === 'EXPENSE' ? '#2563EB' : '#94A3B8' }}>💸 Gasto</Text>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: type === 'EXPENSE' ? '#2563EB' : colors.textMuted }}>
+              Gasto
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => { setType('INCOME'); setSelectedCategoryId(null); }}
             style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12, backgroundColor: type === 'INCOME' ? '#ECFDF5' : 'transparent' }}
           >
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: type === 'INCOME' ? '#059669' : '#94A3B8' }}>💰 Ingreso</Text>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: type === 'INCOME' ? '#059669' : colors.textMuted }}>
+              Ingreso
+            </Text>
           </TouchableOpacity>
         </View>
 
         {/* Amount */}
-        <View
-          style={{
-            backgroundColor: '#fff',
-            marginHorizontal: 20,
-            marginBottom: 16,
-            borderRadius: 20,
-            paddingTop: 20,
-            paddingBottom: 24,
-            paddingHorizontal: 20,
-            alignItems: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.04,
-            shadowRadius: 16,
-            elevation: 2,
-          }}
-        >
-          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#94A3B8', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+        <View style={{ ...cardStyle, paddingTop: 20, paddingBottom: 24, paddingHorizontal: 20, alignItems: 'center' }}>
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
             Monto
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 26, color: '#94A3B8', marginRight: 4 }}>$</Text>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 26, color: colors.textMuted, marginRight: 4 }}>$</Text>
             <TextInput
               value={amount}
               onChangeText={setAmount}
               placeholder="0"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
               autoFocus
               style={{
                 fontFamily: 'Outfit_800ExtraBold',
                 fontSize: 56,
-                color: '#0F172A',
+                color: colors.textPrimary,
                 letterSpacing: -1,
                 minWidth: 100,
                 textAlign: 'center',
+                padding: 0,
               }}
             />
           </View>
         </View>
 
-        {/* Category grid */}
-        <View
-          style={{
-            backgroundColor: '#fff',
-            marginHorizontal: 20,
-            marginBottom: 16,
-            borderRadius: 20,
-            padding: 18,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.04,
-            shadowRadius: 16,
-            elevation: 2,
-          }}
-        >
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 14, color: '#0F172A' }}>
+        {/* Category grid — tags with color */}
+        <View style={{ ...cardStyle, padding: 18 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 14, color: colors.textPrimary }}>
               Categoría
             </Text>
             <TouchableOpacity onPress={() => navigation.navigate('AddCategory')}>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#2563EB' }}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.brand }}>
                 + Nueva
               </Text>
             </TouchableOpacity>
           </View>
-          
+
           {fetchingCategories ? (
-            <ActivityIndicator color="#2563EB" style={{ marginVertical: 20 }} />
+            <ActivityIndicator color={colors.brand} style={{ marginVertical: 20 }} />
+          ) : filteredCategories.length === 0 ? (
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textMuted, textAlign: 'center', paddingVertical: 16 }}>
+              No hay categorías. Creá una nueva con el botón de arriba.
+            </Text>
           ) : (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between' }}>
-              {filteredCategories.map((cat) => {
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {filteredCategories.map((cat, idx) => {
+                const catColor = getCategoryColor(cat.icon, idx);
                 const isSelected = selectedCategoryId === cat.id;
                 return (
                   <TouchableOpacity
                     key={cat.id}
                     onPress={() => setSelectedCategoryId(cat.id)}
                     style={{
-                      width: '23%',
-                      backgroundColor: isSelected ? '#EFF6FF' : '#F8FAFC',
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      borderRadius: 10,
                       borderWidth: 1.5,
-                      borderColor: isSelected ? '#2563EB' : 'transparent',
-                      borderRadius: 14,
-                      paddingVertical: 10,
+                      borderColor: isSelected ? catColor : `${catColor}30`,
+                      backgroundColor: isSelected ? `${catColor}18` : colors.bgInput,
+                      flexDirection: 'row',
                       alignItems: 'center',
-                      gap: 4,
+                      gap: 6,
                     }}
                   >
-                    <Text style={{ fontSize: 22 }}>{cat.icon || '📦'}</Text>
-                    <Text style={{ fontFamily: isSelected ? 'Inter_600SemiBold' : 'Inter_400Regular', fontSize: 10, color: isSelected ? '#2563EB' : '#64748B', textAlign: 'center' }} numberOfLines={1}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: catColor }} />
+                    <Text style={{ fontFamily: isSelected ? 'Inter_600SemiBold' : 'Inter_400Regular', fontSize: 13, color: isSelected ? catColor : colors.textSecondary }}>
                       {cat.name}
                     </Text>
                   </TouchableOpacity>
                 );
               })}
-              {filteredCategories.length === 0 && (
-                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#94A3B8', textAlign: 'center', width: '100%', marginTop: 10 }}>
-                  No hay categorías. Creá una nueva.
-                </Text>
-              )}
             </View>
           )}
         </View>
 
-        {/* Date & Notes */}
-        <View
-          style={{
-            backgroundColor: '#fff',
-            marginHorizontal: 20,
-            marginBottom: 24,
-            borderRadius: 20,
-            padding: 18,
-            gap: 14,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.04,
-            shadowRadius: 16,
-            elevation: 2,
-          }}
-        >
-          <View>
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#64748B', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Fecha
+        {/* Date picker */}
+        <View style={{ ...cardStyle, padding: 18 }}>
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Fecha
+          </Text>
+          <TouchableOpacity
+            onPress={() => setShowDatePicker(true)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.bgInput, borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13 }}
+          >
+            <Calendar size={18} color={colors.brand} />
+            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 15, color: colors.textPrimary, flex: 1 }}>
+              {formattedDate}
             </Text>
-            <TextInput
-              value={date}
-              onChangeText={setDate}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#94A3B8"
-              style={{
-                width: '100%',
-                paddingHorizontal: 14,
-                paddingVertical: 12,
-                borderRadius: 12,
-                borderWidth: 1.5,
-                borderColor: '#E2E8F0',
-                backgroundColor: '#F8FAFC',
-                fontSize: 14,
-                fontFamily: 'Inter_400Regular',
-                color: '#0F172A',
+          </TouchableOpacity>
+          {showDatePicker && (
+            <DateTimePicker
+              value={selectedDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              maximumDate={new Date()}
+              onChange={(event, date) => {
+                setShowDatePicker(Platform.OS === 'ios');
+                if (date) setSelectedDate(date);
               }}
             />
-          </View>
-          <View>
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#64748B', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Notas (opcional)
-            </Text>
-            <TextInput
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Ej: Almuerzo con el equipo"
-              placeholderTextColor="#94A3B8"
-              multiline
-              numberOfLines={3}
-              style={{
-                width: '100%',
-                paddingHorizontal: 14,
-                paddingVertical: 12,
-                borderRadius: 12,
-                borderWidth: 1.5,
-                borderColor: '#E2E8F0',
-                backgroundColor: '#F8FAFC',
-                fontSize: 14,
-                fontFamily: 'Inter_400Regular',
-                color: '#0F172A',
-                textAlignVertical: 'top',
-              }}
-            />
-          </View>
+          )}
+        </View>
+
+        {/* Notes */}
+        <View style={{ ...cardStyle, padding: 18 }}>
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Notas (opcional)
+          </Text>
+          <TextInput
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Ej: Almuerzo con el equipo"
+            placeholderTextColor={colors.textMuted}
+            multiline
+            numberOfLines={3}
+            style={{ width: '100%', paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.bgInput, fontSize: 14, fontFamily: 'Inter_400Regular', color: colors.textPrimary, textAlignVertical: 'top' }}
+          />
         </View>
 
         <View style={{ paddingHorizontal: 20 }}>
@@ -302,19 +271,7 @@ export const AddTransactionScreen: React.FC = () => {
             onPress={handleSubmit}
             disabled={loading}
             activeOpacity={0.8}
-            style={{
-              width: '100%',
-              backgroundColor: '#2563EB',
-              borderRadius: 14,
-              paddingVertical: 17,
-              alignItems: 'center',
-              justifyContent: 'center',
-              shadowColor: '#2563EB',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.4,
-              shadowRadius: 16,
-              elevation: 4,
-            }}
+            style={{ width: '100%', backgroundColor: colors.brand, borderRadius: 14, paddingVertical: 17, alignItems: 'center', justifyContent: 'center', shadowColor: colors.brand, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 4 }}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />

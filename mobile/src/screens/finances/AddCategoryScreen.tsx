@@ -10,16 +10,31 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import apiClient from '../../api/client';
-import { ArrowLeft, Check, PlusCircle } from 'lucide-react-native';
+import { ArrowLeft, Check } from 'lucide-react-native';
+import { useTheme } from '../../context/ThemeContext';
 
-const ICONS = ['🛒', '🍔', '🚌', '🏠', '💡', '🎮', '🏥', '👕', '📚', '🎁', '💼', '💰'];
+const COLOR_OPTIONS = [
+  '#2563EB', // Azul
+  '#7C3AED', // Violeta
+  '#DB2777', // Rosa
+  '#059669', // Verde
+  '#D97706', // Ámbar
+  '#0891B2', // Cyan
+  '#DC2626', // Rojo
+  '#65A30D', // Lima
+  '#9333EA', // Púrpura
+  '#0F172A', // Negro
+  '#64748B', // Gris
+  '#EA580C', // Naranja
+];
 
 export const AddCategoryScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const { colors } = useTheme();
 
   const [name, setName] = useState('');
   const [type, setType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
-  const [selectedIcon, setSelectedIcon] = useState(ICONS[0]);
+  const [selectedColor, setSelectedColor] = useState(COLOR_OPTIONS[0]);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
@@ -33,9 +48,8 @@ export const AddCategoryScreen: React.FC = () => {
       await apiClient.post('/categories', {
         name: name.trim(),
         type,
-        icon: selectedIcon,
+        icon: selectedColor, // guardamos el color hex en el campo icon
       });
-      // Volver a la pantalla anterior
       navigation.goBack();
     } catch (e: any) {
       const msg = e.response?.data?.message || 'Error al guardar la categoría';
@@ -46,106 +60,145 @@ export const AddCategoryScreen: React.FC = () => {
   };
 
   return (
-    <View className="flex-1 bg-surface-900 px-6 pt-12">
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
       {/* Header */}
-      <View className="flex-row items-center justify-between mb-6">
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 52, paddingBottom: 16, gap: 12 }}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
-          className="w-10 h-10 rounded-full bg-surface-800 border border-slate-700 items-center justify-center"
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 12,
+            backgroundColor: colors.bgCard,
+            borderWidth: 1,
+            borderColor: colors.border,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
         >
-          <ArrowLeft size={20} color="#94a3b8" />
+          <ArrowLeft size={18} color={colors.textSecondary} />
         </TouchableOpacity>
-        <Text className="text-xl font-bold text-slate-100">Nueva Categoría</Text>
-        <View className="w-10" />
+        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: colors.textPrimary }}>
+          Nueva Categoría
+        </Text>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Type Selector */}
-        <View className="flex-row bg-surface-800 p-1.5 rounded-2xl border border-slate-700 mb-6">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
+
+        {/* Type selector */}
+        <View style={{ flexDirection: 'row', backgroundColor: colors.bgCard, padding: 6, borderRadius: 16, marginBottom: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
           <TouchableOpacity
             onPress={() => setType('EXPENSE')}
-            className={`flex-1 py-3 rounded-xl items-center ${
-              type === 'EXPENSE' ? 'bg-rose-500' : 'bg-transparent'
-            }`}
+            style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12, backgroundColor: type === 'EXPENSE' ? '#EFF6FF' : 'transparent' }}
           >
-            <Text
-              className={`font-semibold ${
-                type === 'EXPENSE' ? 'text-slate-950' : 'text-slate-400'
-              }`}
-            >
-              💸 Gasto
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: type === 'EXPENSE' ? '#2563EB' : colors.textMuted }}>
+              Gasto
             </Text>
           </TouchableOpacity>
-
           <TouchableOpacity
             onPress={() => setType('INCOME')}
-            className={`flex-1 py-3 rounded-xl items-center ${
-              type === 'INCOME' ? 'bg-emerald-500' : 'bg-transparent'
-            }`}
+            style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12, backgroundColor: type === 'INCOME' ? '#ECFDF5' : 'transparent' }}
           >
-            <Text
-              className={`font-semibold ${
-                type === 'INCOME' ? 'text-slate-950' : 'text-slate-400'
-              }`}
-            >
-              💰 Ingreso
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: type === 'INCOME' ? '#059669' : colors.textMuted }}>
+              Ingreso
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Name Input */}
-        <View className="bg-surface-800/80 border border-slate-700/50 rounded-3xl p-5 mb-6">
-          <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+        {/* Name input */}
+        <View style={{ marginBottom: 20 }}>
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
             Nombre
           </Text>
           <TextInput
             value={name}
             onChangeText={setName}
             placeholder="Ej: Suscripciones"
-            placeholderTextColor="#94a3b8"
-            style={{ color: '#f8fafc', backgroundColor: 'transparent' }}
-            className="text-lg font-medium py-2"
+            placeholderTextColor={colors.textMuted}
+            autoFocus
+            style={{
+              backgroundColor: colors.bgCard,
+              borderWidth: 1.5,
+              borderColor: colors.border,
+              borderRadius: 14,
+              paddingHorizontal: 16,
+              paddingVertical: 14,
+              fontFamily: 'Inter_500Medium',
+              fontSize: 16,
+              color: colors.textPrimary,
+            }}
           />
         </View>
 
-        {/* Icon Picker */}
-        <View className="mb-8">
-          <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-            Seleccioná un Icono
+        {/* Color picker */}
+        <View style={{ marginBottom: 32 }}>
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Color del Tag
           </Text>
-          <View className="flex-row flex-wrap gap-3">
-            {ICONS.map((icon, idx) => (
+
+          {/* Preview */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16, backgroundColor: colors.bgCard, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.border }}>
+            <View style={{ backgroundColor: `${selectedColor}20`, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: selectedColor }}>
+                {name || 'Ejemplo'}
+              </Text>
+            </View>
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textMuted }}>
+              Así va a verse el tag
+            </Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+            {COLOR_OPTIONS.map((color) => (
               <TouchableOpacity
-                key={idx}
-                onPress={() => setSelectedIcon(icon)}
-                className={`w-14 h-14 rounded-2xl items-center justify-center border ${
-                  selectedIcon === icon
-                    ? 'bg-brand-500/20 border-brand-500'
-                    : 'bg-surface-800 border-slate-700/70'
-                }`}
+                key={color}
+                onPress={() => setSelectedColor(color)}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: color,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: selectedColor === color ? 3 : 0,
+                  borderColor: '#fff',
+                  shadowColor: color,
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: selectedColor === color ? 0.5 : 0,
+                  shadowRadius: 8,
+                  elevation: selectedColor === color ? 4 : 0,
+                }}
               >
-                <Text className="text-2xl">{icon}</Text>
+                {selectedColor === color && <Check size={18} color="#fff" strokeWidth={3} />}
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        {/* Submit Button */}
+        {/* Submit */}
         <TouchableOpacity
           onPress={handleSubmit}
           disabled={loading}
           activeOpacity={0.8}
-          className="bg-brand-500 py-4 rounded-2xl flex-row justify-center items-center mb-12 shadow-lg shadow-brand-500/30"
+          style={{
+            backgroundColor: colors.brand,
+            borderRadius: 14,
+            paddingVertical: 17,
+            alignItems: 'center',
+            justifyContent: 'center',
+            shadowColor: colors.brand,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.4,
+            shadowRadius: 16,
+            elevation: 4,
+          }}
         >
           {loading ? (
-            <ActivityIndicator color="#0f172a" />
+            <ActivityIndicator color="#fff" />
           ) : (
-            <>
-              <PlusCircle size={20} color="#0f172a" />
-              <Text className="text-slate-950 font-bold text-base ml-2">
-                Crear Categoría
-              </Text>
-            </>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>
+              Crear Categoría
+            </Text>
           )}
         </TouchableOpacity>
       </ScrollView>

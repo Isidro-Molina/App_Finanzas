@@ -6,11 +6,15 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import apiClient from '../../api/client';
 import { SpendingChart } from '../../components/SpendingChart';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '../../context/ThemeContext';
+import { Info, X, User, ChevronLeft, ChevronRight } from 'lucide-react-native';
 
 interface SummaryData {
   month: number;
@@ -34,7 +38,7 @@ interface Transaction {
   date: string;
   category: {
     name: string;
-    icon: string | null;
+    icon: string | null; // used to store color hex
   };
 }
 
@@ -46,36 +50,48 @@ interface Budget {
   pctUsed: number;
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  Comida: '#2563EB',
-  Transporte: '#7C3AED',
-  Entretenimiento: '#DB2777',
-  Salud: '#059669',
-  Hogar: '#D97706',
-  Otro: '#64748B',
-};
+// Map category icon field (which may hold a color) or use a default palette
+function getCategoryColor(icon: string | null, index: number): string {
+  const palette = ['#2563EB', '#7C3AED', '#DB2777', '#059669', '#D97706', '#0891B2', '#DC2626', '#65A30D'];
+  if (icon && icon.startsWith('#')) return icon;
+  return palette[index % palette.length];
+}
 
 export const DashboardScreen = () => {
   const navigation = useNavigation<any>();
+  const { colors } = useTheme();
 
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [tooltipTx, setTooltipTx] = useState<Transaction | null>(null);
+
+  // Month navigation
+  const now = new Date();
+  const [currentMonth, setCurrentMonth] = useState(now.getMonth() + 1);
+  const [currentYear, setCurrentYear] = useState(now.getFullYear());
+
+  const goToPrevMonth = () => {
+    if (currentMonth === 1) { setCurrentMonth(12); setCurrentYear((y) => y - 1); }
+    else setCurrentMonth((m) => m - 1);
+  };
+  const goToNextMonth = () => {
+    const isCurrentMonth = currentMonth === now.getMonth() + 1 && currentYear === now.getFullYear();
+    if (isCurrentMonth) return; // can't go forward beyond today
+    if (currentMonth === 12) { setCurrentMonth(1); setCurrentYear((y) => y + 1); }
+    else setCurrentMonth((m) => m + 1);
+  };
+  const isCurrentMonth = currentMonth === now.getMonth() + 1 && currentYear === now.getFullYear();
 
   const fetchData = async () => {
     try {
-      const now = new Date();
-      const month = now.getMonth() + 1;
-      const year = now.getFullYear();
-
       const [summaryRes, txRes, budgetRes] = await Promise.all([
-        apiClient.get(`/transactions/summary?month=${month}&year=${year}`),
-        apiClient.get(`/transactions?month=${month}&year=${year}`),
-        apiClient.get(`/budgets?month=${month}&year=${year}`),
+        apiClient.get(`/transactions/summary?month=${currentMonth}&year=${currentYear}`),
+        apiClient.get(`/transactions?month=${currentMonth}&year=${currentYear}`),
+        apiClient.get(`/budgets?month=${currentMonth}&year=${currentYear}`),
       ]);
-
       setSummary(summaryRes.data);
       setTransactions(txRes.data);
       setBudgets(budgetRes.data);
@@ -90,7 +106,7 @@ export const DashboardScreen = () => {
   useFocusEffect(
     useCallback(() => {
       fetchData();
-    }, []),
+    }, [currentMonth, currentYear]),
   );
 
   const onRefresh = () => {
@@ -106,38 +122,43 @@ export const DashboardScreen = () => {
 
   if (loading && !refreshing) {
     return (
-      <View className="flex-1 bg-surface justify-center items-center">
-        <ActivityIndicator size="large" color="#2563EB" />
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#94A3B8', marginTop: 12 }}>
+      <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={colors.brand} />
+        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: colors.textMuted, marginTop: 12 }}>
           Cargando tus finanzas...
         </Text>
       </View>
     );
   }
 
-  const monthName = new Date().toLocaleString('es-AR', { month: 'long' });
-  const yearStr = new Date().getFullYear();
+  const monthName = new Date(currentYear, currentMonth - 1, 1).toLocaleString('es-AR', { month: 'long' });
+  const yearStr = currentYear;
 
   return (
-    <View className="flex-1 bg-surface">
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: 120 }}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#2563EB"
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />
         }
       >
-        {/* Top bar */}
+        {/* Top bar with month navigation */}
         <View style={{ paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View>
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: '#64748B', marginBottom: 2 }}>
-              {monthName.charAt(0).toUpperCase() + monthName.slice(1)} {yearStr}
-            </Text>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 22, color: '#0F172A' }}>
+            {/* Month navigator */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+              <TouchableOpacity onPress={goToPrevMonth} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <ChevronLeft size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.brand }}>
+                {monthName.charAt(0).toUpperCase() + monthName.slice(1)} {yearStr}
+              </Text>
+              <TouchableOpacity onPress={goToNextMonth} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <ChevronRight size={16} color={isCurrentMonth ? colors.borderSubtle : colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 22, color: colors.textPrimary }}>
               Mis Finanzas
             </Text>
           </View>
@@ -145,15 +166,9 @@ export const DashboardScreen = () => {
             colors={['#2563EB', '#7C3AED']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+            style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }}
           >
-            <Text style={{ fontSize: 18 }}>👤</Text>
+            <User size={18} color="#fff" />
           </LinearGradient>
         </View>
 
@@ -196,103 +211,157 @@ export const DashboardScreen = () => {
 
         {/* Donut chart */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
-          <SpendingChart
-            categories={summary?.byCategory ?? []}
-            totalExpense={summary?.totalExpense ?? 0}
-          />
+          <SpendingChart categories={summary?.byCategory ?? []} totalExpense={summary?.totalExpense ?? 0} />
         </View>
 
-        {/* Expenses header */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: '#0F172A' }}>
+        {/* Expenses header — solo label, sin botón de texto */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 }}>
+          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: colors.textPrimary }}>
             Últimos Gastos
           </Text>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('AddTransaction')}
-            style={{ backgroundColor: '#EFF6FF', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 }}
-          >
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#2563EB' }}>
-              + Agregar
-            </Text>
-          </TouchableOpacity>
         </View>
 
         {/* Expenses list */}
         <View style={{ paddingHorizontal: 20, gap: 8 }}>
-          {transactions.map((tx) => {
-            const isIncome = tx.type === 'INCOME';
-            const catName = tx.category?.name || 'Otro';
-            const catColor = CATEGORY_COLORS[catName] || '#64748B';
+          {transactions.length === 0 ? (
+            <View style={{ backgroundColor: colors.bgCard, borderRadius: 14, padding: 24, alignItems: 'center' }}>
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: colors.textMuted }}>
+                Aún no hay transacciones este mes.
+              </Text>
+            </View>
+          ) : (
+            transactions.map((tx, index) => {
+              const isIncome = tx.type === 'INCOME';
+              const catColor = getCategoryColor(tx.category?.icon, index);
+              const hasDescription = Boolean(tx.description && tx.description.trim());
 
-            return (
-              <View
-                key={tx.id}
-                style={{
-                  backgroundColor: '#fff',
-                  borderRadius: 14,
-                  paddingVertical: 14,
-                  paddingHorizontal: 16,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 12,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.05,
-                  shadowRadius: 3,
-                  elevation: 1,
-                }}
-              >
+              return (
                 <View
+                  key={tx.id}
                   style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 12,
-                    backgroundColor: `${catColor}18`, // 18 hex is around 10% opacity
+                    backgroundColor: colors.bgCard,
+                    borderRadius: 14,
+                    paddingVertical: 14,
+                    paddingHorizontal: 16,
+                    flexDirection: 'row',
                     alignItems: 'center',
-                    justifyContent: 'center',
+                    gap: 12,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.05,
+                    shadowRadius: 3,
+                    elevation: 1,
                   }}
                 >
-                  <Text style={{ fontSize: 20 }}>{tx.category?.icon || '📦'}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: '#0F172A', marginBottom: 2 }}>
-                    {tx.description || catName}
+                  {/* Color dot instead of emoji */}
+                  <View
+                    style={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: 12,
+                      backgroundColor: `${catColor}22`,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: catColor }} />
+                  </View>
+
+                  <View style={{ flex: 1 }}>
+                    {/* Category tag */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                      <View style={{ backgroundColor: `${catColor}18`, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: catColor }}>
+                          {tx.category?.name || 'Sin categoría'}
+                        </Text>
+                      </View>
+                      {hasDescription && (
+                        <TouchableOpacity onPress={() => setTooltipTx(tx)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <Info size={14} color={colors.textMuted} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: colors.textPrimary, marginBottom: 1 }}>
+                      {tx.description || tx.category?.name || 'Transacción'}
+                    </Text>
+                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>
+                      {new Date(tx.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+                    </Text>
+                  </View>
+
+                  <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: isIncome ? colors.income : colors.expense }}>
+                    {isIncome ? '+' : '-'}${Math.abs(Number(tx.amount)).toLocaleString('es-AR')}
                   </Text>
-                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#94A3B8' }}>
-                    {new Date(tx.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
-                  </Text>
                 </View>
-                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: isIncome ? '#059669' : '#EF4444' }}>
-                  {isIncome ? '+' : '-'}${Math.abs(Number(tx.amount)).toLocaleString('es-AR')}
-                </Text>
-              </View>
-            );
-          })}
+              );
+            })
+          )}
         </View>
       </ScrollView>
 
-      {/* FAB */}
+      {/* FAB — único botón de agregar */}
       <TouchableOpacity
         onPress={() => navigation.navigate('AddTransaction')}
         style={{
           position: 'absolute',
           bottom: 24,
           right: 20,
-          width: 52,
-          height: 52,
-          borderRadius: 26,
-          backgroundColor: '#2563EB',
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          backgroundColor: colors.brand,
           alignItems: 'center',
           justifyContent: 'center',
-          shadowColor: '#2563EB',
+          shadowColor: colors.brand,
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: 0.45,
           shadowRadius: 20,
           elevation: 5,
         }}
       >
-        <Text style={{ color: '#fff', fontSize: 26, fontWeight: '300' }}>+</Text>
+        <Text style={{ color: '#fff', fontSize: 28, fontWeight: '300', lineHeight: 32, marginTop: -2 }}>+</Text>
       </TouchableOpacity>
+
+      {/* Tooltip modal para descripción */}
+      <Modal visible={!!tooltipTx} transparent animationType="fade" onRequestClose={() => setTooltipTx(null)}>
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}
+          onPress={() => setTooltipTx(null)}
+        >
+          <Pressable
+            style={{
+              backgroundColor: colors.bgCard,
+              borderRadius: 20,
+              padding: 24,
+              width: '100%',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.15,
+              shadowRadius: 20,
+              elevation: 10,
+            }}
+            onPress={() => {}}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+              <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: colors.textPrimary, flex: 1, marginRight: 12 }}>
+                {tooltipTx?.category?.name || 'Detalle'}
+              </Text>
+              <TouchableOpacity onPress={() => setTooltipTx(null)}>
+                <X size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: colors.textSecondary, lineHeight: 20 }}>
+              {tooltipTx?.description}
+            </Text>
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted, marginTop: 12 }}>
+              {tooltipTx ? new Date(tooltipTx.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' }) : ''}
+            </Text>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 };
+
+
