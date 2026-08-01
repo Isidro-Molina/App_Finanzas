@@ -3,10 +3,10 @@ module.exports = {
   // NativeWind v4: apunta a todos los archivos que usarán clases de Tailwind
   content: [
     "./App.{js,jsx,ts,tsx}",
+    "./src/**/*.{js,jsx,ts,tsx}",
     "./app/**/*.{js,jsx,ts,tsx}",
     "./components/**/*.{js,jsx,ts,tsx}",
     "./screens/**/*.{js,jsx,ts,tsx}",
-    "./hooks/**/*.{js,jsx,ts,tsx}",
   ],
   presets: [require("nativewind/preset")],
   theme: {
@@ -26,6 +26,17 @@ module.exports = {
           900: "#0c4a6e",
         },
         surface: {
+          50:  "#f8fafc",
+          100: "#f1f5f9",
+          200: "#e2e8f0",
+          300: "#cbd5e1",
+          400: "#94a3b8",
+          500: "#64748b",
+          600: "#475569",
+          700: "#334155",
+          800: "#1e293b",
+          900: "#0f172a",
+          950: "#020617",
           DEFAULT: "#0f172a",  // Fondo oscuro principal
           card:    "#1e293b",  // Tarjeta / panel
           elevated:"#334155",  // Elemento elevado
