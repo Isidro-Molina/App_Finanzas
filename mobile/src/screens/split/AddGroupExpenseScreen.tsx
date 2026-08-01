@@ -10,12 +10,14 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import apiClient from '../../api/client';
-import { ArrowLeft, PlusCircle } from 'lucide-react-native';
+import { ArrowLeft, Plus } from 'lucide-react-native';
+import { useTheme } from '../../context/ThemeContext';
 
 export const AddGroupExpenseScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { groupId } = route.params || {};
+  const { colors } = useTheme();
 
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -46,49 +48,68 @@ export const AddGroupExpenseScreen: React.FC = () => {
     }
   };
 
+  const cardStyle = {
+    backgroundColor: colors.bgCard,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 16,
+    shadowColor: '#000' as string,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    elevation: 2,
+  };
+
   return (
-    <View className="flex-1 bg-surface-900 px-6 pt-12">
-      <View className="flex-row items-center justify-between mb-6">
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      {/* Header */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 52, paddingBottom: 16, gap: 12 }}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
-          className="w-10 h-10 rounded-full bg-surface-800 border border-slate-700 items-center justify-center"
+          style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
         >
-          <ArrowLeft size={20} color="#94a3b8" />
+          <ArrowLeft size={18} color={colors.textSecondary} />
         </TouchableOpacity>
-        <Text className="text-xl font-bold text-slate-100">Gasto del Grupo</Text>
-        <View className="w-10" />
+        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: colors.textPrimary }}>
+          Cargar Gasto del Grupo
+        </Text>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View className="bg-surface-800/80 border border-slate-700/50 rounded-3xl p-5 mb-6">
-          <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
+
+        {/* Description */}
+        <View style={cardStyle}>
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
             ¿Qué se pagó?
           </Text>
           <TextInput
             value={description}
             onChangeText={setDescription}
             placeholder="Ej: Asado carnicería, Nafta, Hotel"
-            placeholderTextColor="#94a3b8"
-            style={{ color: '#f8fafc', backgroundColor: 'transparent' }}
-            className="text-lg py-1 font-medium"
+            placeholderTextColor={colors.textMuted}
+            autoFocus
+            style={{ fontFamily: 'Inter_500Medium', fontSize: 16, color: colors.textPrimary, paddingVertical: 4 }}
           />
         </View>
 
-        <View className="bg-surface-800/80 border border-slate-700/50 rounded-3xl p-5 mb-8">
-          <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-            Monto Total Pagado ($)
+        {/* Amount */}
+        <View style={{ ...cardStyle, alignItems: 'center', paddingVertical: 24 }}>
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+            Monto Total
           </Text>
-          <TextInput
-            value={amount}
-            onChangeText={setAmount}
-            placeholder="0.00"
-            placeholderTextColor="#94a3b8"
-            keyboardType="decimal-pad"
-            style={{ color: '#f8fafc', backgroundColor: 'transparent' }}
-            className="text-4xl font-bold py-2"
-          />
-          <Text className="text-xs text-slate-400 mt-2">
-            El monto se dividirá equitativamente entre todos los miembros del grupo.
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 26, color: colors.textMuted, marginRight: 4 }}>$</Text>
+            <TextInput
+              value={amount}
+              onChangeText={setAmount}
+              placeholder="0"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="decimal-pad"
+              style={{ fontFamily: 'Outfit_800ExtraBold', fontSize: 48, color: colors.textPrimary, letterSpacing: -1, minWidth: 80, textAlign: 'center', padding: 0 }}
+            />
+          </View>
+          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted, marginTop: 8, textAlign: 'center' }}>
+            Se dividirá equitativamente entre todos los miembros.
           </Text>
         </View>
 
@@ -96,17 +117,14 @@ export const AddGroupExpenseScreen: React.FC = () => {
           onPress={handleSubmit}
           disabled={loading}
           activeOpacity={0.8}
-          className="bg-brand-500 py-4 rounded-2xl flex-row justify-center items-center mb-12 shadow-lg shadow-brand-500/30"
+          style={{ backgroundColor: colors.brand, borderRadius: 14, paddingVertical: 17, alignItems: 'center', justifyContent: 'center', shadowColor: colors.brand, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 4 }}
         >
           {loading ? (
-            <ActivityIndicator color="#0f172a" />
+            <ActivityIndicator color="#fff" />
           ) : (
-            <>
-              <PlusCircle size={20} color="#0f172a" />
-              <Text className="text-slate-950 font-bold text-base ml-2">
-                Cargar Gasto
-              </Text>
-            </>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>
+              Cargar Gasto
+            </Text>
           )}
         </TouchableOpacity>
       </ScrollView>

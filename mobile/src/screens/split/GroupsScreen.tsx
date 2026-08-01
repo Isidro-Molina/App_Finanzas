@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import apiClient from '../../api/client';
+import { useTheme } from '../../context/ThemeContext';
+import { Users } from 'lucide-react-native';
 
 interface Group {
   id: string;
@@ -78,6 +80,7 @@ const AvatarStack = ({ members }: { members: Array<any> }) => {
 
 export const GroupsScreen = () => {
   const navigation = useNavigation<any>();
+  const { colors } = useTheme();
 
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
@@ -249,7 +252,7 @@ export const GroupsScreen = () => {
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}>
-                    <Text style={{ fontSize: 24 }}>🌴</Text>
+                    <Users size={22} color="#2563EB" />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: '#0F172A', marginBottom: 6 }}>
