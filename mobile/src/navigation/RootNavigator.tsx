@@ -14,7 +14,7 @@ import { SettingsScreen } from '../screens/settings/SettingsScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
 import { AddCategoryScreen } from '../screens/finances/AddCategoryScreen';
 
-import { Wallet, Users, Sliders, User } from 'lucide-react-native';
+import { Text } from 'react-native';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -37,17 +37,20 @@ const MainTabs = () => {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#0f172a', // surface-900
-          borderTopColor: '#334155', // slate-700
-          height: 64,
-          paddingBottom: 8,
+          backgroundColor: '#ffffff',
+          borderTopColor: '#F1F5F9',
+          borderTopWidth: 1,
+          height: 72,
+          paddingBottom: 12,
           paddingTop: 8,
+          elevation: 0,
+          shadowOpacity: 0,
         },
-        tabBarActiveTintColor: '#38bdf8', // brand-500
-        tabBarInactiveTintColor: '#64748b', // slate-500
+        tabBarActiveTintColor: '#2563EB',
+        tabBarInactiveTintColor: '#94A3B8',
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: '600',
+          fontFamily: 'Inter_600SemiBold',
         },
       }}
     >
@@ -55,28 +58,28 @@ const MainTabs = () => {
         name="Finanzas"
         component={DashboardScreen}
         options={{
-          tabBarIcon: ({ color, size }) => <Wallet size={size} color={color} />,
+          tabBarIcon: ({ focused }) => <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.6 }}>💳</Text>,
         }}
       />
       <Tab.Screen
         name="Grupos"
         component={GroupStack}
         options={{
-          tabBarIcon: ({ color, size }) => <Users size={size} color={color} />,
+          tabBarIcon: ({ focused }) => <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.6 }}>👥</Text>,
         }}
       />
       <Tab.Screen
         name="Ajustes"
         component={SettingsScreen}
         options={{
-          tabBarIcon: ({ color, size }) => <Sliders size={size} color={color} />,
+          tabBarIcon: ({ focused }) => <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.6 }}>⚙️</Text>,
         }}
       />
       <Tab.Screen
         name="Usuario"
         component={ProfileScreen}
         options={{
-          tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
+          tabBarIcon: ({ focused }) => <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.6 }}>👤</Text>,
         }}
       />
     </Tab.Navigator>
@@ -88,8 +91,8 @@ export const RootNavigator = () => {
 
   if (isLoading) {
     return (
-      <View className="flex-1 bg-surface-900 justify-center items-center">
-        <ActivityIndicator size="large" color="#38bdf8" />
+      <View className="flex-1 bg-surface justify-center items-center">
+        <ActivityIndicator size="large" color="#2563EB" />
       </View>
     );
   }

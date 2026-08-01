@@ -10,7 +10,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
-import { Wallet, LogIn, UserPlus } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export const LoginScreen = () => {
   const { login, register } = useAuth();
@@ -49,73 +49,109 @@ export const LoginScreen = () => {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-surface-900 justify-center"
+      className="flex-1 bg-surface"
     >
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 28, paddingTop: 60, paddingBottom: 40 }}
         keyboardShouldPersistTaps="handled"
-        className="px-6 py-12"
+        showsVerticalScrollIndicator={false}
       >
         {/* Brand / Logo Area */}
-        <View className="items-center mb-10">
-          <View className="w-20 h-20 rounded-3xl bg-brand-500/20 border border-brand-500/30 items-center justify-center mb-4">
-            <Wallet size={40} color="#38bdf8" />
-          </View>
-          <Text className="text-3xl font-bold text-slate-100 tracking-tight text-center">
-            Finanzas & Split
+        <View className="items-center mb-12">
+          <LinearGradient
+            colors={['#1D4ED8', '#2563EB']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: 18,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 16,
+              shadowColor: '#2563EB',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.3,
+              shadowRadius: 24,
+              elevation: 8,
+            }}
+          >
+            <Text style={{ fontSize: 28 }}>💳</Text>
+          </LinearGradient>
+
+          <Text style={{ fontFamily: 'Outfit_800ExtraBold', fontSize: 32, color: '#0F172A', marginBottom: 6 }}>
+            Finova
           </Text>
-          <Text className="text-sm text-slate-400 text-center mt-1">
-            {isRegisterMode
-              ? 'Crea tu cuenta para comenzar'
-              : 'Ingresa para gestionar tus gastos y grupos'}
+          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#64748B' }}>
+            Tu dinero, organizado.
           </Text>
         </View>
 
-        {/* Form Card */}
-        <View className="bg-surface-800/80 border border-slate-700/50 rounded-3xl p-6 shadow-xl">
-          {errorMsg ? (
-            <View className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-4 mb-4">
-              <Text className="text-rose-400 text-sm text-center font-medium">
-                {errorMsg}
-              </Text>
-            </View>
-          ) : null}
+        {errorMsg ? (
+          <View className="bg-rose-50 border border-rose-200 rounded-2xl p-4 mb-6">
+            <Text className="text-rose-600 text-sm text-center font-medium">
+              {errorMsg}
+            </Text>
+          </View>
+        ) : null}
 
+        {/* Form */}
+        <View className="flex-1" style={{ gap: 14 }}>
           {isRegisterMode && (
-            <View className="mb-4">
-              <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+            <View>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#64748B', marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>
                 Nombre Completo
               </Text>
               <TextInput
                 value={name}
                 onChangeText={setName}
-                placeholder="Ej: Juan Pérez"
+                placeholder="Ej: Ana Rodríguez"
                 placeholderTextColor="#94a3b8"
-                style={{ color: '#f8fafc', backgroundColor: '#0f172a' }}
-                className="border border-slate-700 rounded-2xl px-4 py-3.5 text-base font-medium"
+                style={{
+                  width: '100%',
+                  paddingHorizontal: 18,
+                  paddingVertical: 16,
+                  borderRadius: 14,
+                  borderWidth: 1.5,
+                  borderColor: '#E2E8F0',
+                  backgroundColor: '#fff',
+                  fontSize: 16,
+                  fontFamily: 'Inter_400Regular',
+                  color: '#0F172A',
+                }}
                 autoCapitalize="words"
               />
             </View>
           )}
 
-          <View className="mb-4">
-            <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-              Correo Electrónico
+          <View>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#64748B', marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+              Email
             </Text>
             <TextInput
               value={email}
               onChangeText={setEmail}
               placeholder="tu@email.com"
               placeholderTextColor="#94a3b8"
-              style={{ color: '#f8fafc', backgroundColor: '#0f172a' }}
-              className="border border-slate-700 rounded-2xl px-4 py-3.5 text-base font-medium"
+              style={{
+                width: '100%',
+                paddingHorizontal: 18,
+                paddingVertical: 16,
+                borderRadius: 14,
+                borderWidth: 1.5,
+                borderColor: '#E2E8F0',
+                backgroundColor: '#fff',
+                fontSize: 16,
+                fontFamily: 'Inter_400Regular',
+                color: '#0F172A',
+              }}
               keyboardType="email-address"
               autoCapitalize="none"
             />
           </View>
 
-          <View className="mb-6">
-            <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+          <View>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#64748B', marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>
               Contraseña
             </Text>
             <TextInput
@@ -123,51 +159,67 @@ export const LoginScreen = () => {
               onChangeText={setPassword}
               placeholder="••••••••"
               placeholderTextColor="#94a3b8"
-              style={{ color: '#f8fafc', backgroundColor: '#0f172a' }}
-              className="border border-slate-700 rounded-2xl px-4 py-3.5 text-base font-medium"
+              style={{
+                width: '100%',
+                paddingHorizontal: 18,
+                paddingVertical: 16,
+                borderRadius: 14,
+                borderWidth: 1.5,
+                borderColor: '#E2E8F0',
+                backgroundColor: '#fff',
+                fontSize: 16,
+                fontFamily: 'Inter_400Regular',
+                color: '#0F172A',
+              }}
               secureTextEntry
             />
           </View>
+
+          {!isRegisterMode && (
+            <TouchableOpacity style={{ alignItems: 'flex-end', marginTop: -4 }}>
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: '#2563EB' }}>
+                ¿Olvidaste tu contraseña?
+              </Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             onPress={handleSubmit}
             disabled={loading}
             activeOpacity={0.8}
-            className="bg-brand-500 py-4 rounded-2xl flex-row justify-center items-center shadow-lg shadow-brand-500/30"
+            style={{
+              marginTop: 8,
+              backgroundColor: '#2563EB',
+              borderRadius: 14,
+              paddingVertical: 17,
+              alignItems: 'center',
+              justifyContent: 'center',
+              shadowColor: '#2563EB',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.4,
+              shadowRadius: 16,
+              elevation: 4,
+            }}
           >
             {loading ? (
-              <ActivityIndicator color="#0f172a" />
+              <ActivityIndicator color="#fff" />
             ) : (
-              <>
-                {isRegisterMode ? (
-                  <UserPlus size={20} color="#0f172a" className="mr-2" />
-                ) : (
-                  <LogIn size={20} color="#0f172a" className="mr-2" />
-                )}
-                <Text className="text-slate-950 font-bold text-base ml-2">
-                  {isRegisterMode ? 'Crear Cuenta' : 'Iniciar Sesión'}
-                </Text>
-              </>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>
+                {isRegisterMode ? 'Crear Cuenta' : 'Iniciar Sesión'}
+              </Text>
             )}
           </TouchableOpacity>
-        </View>
 
-        {/* Toggle Mode */}
-        <View className="flex-row justify-center items-center mt-8">
-          <Text className="text-slate-400 text-sm">
-            {isRegisterMode ? '¿Ya tenés una cuenta?' : '¿No tenés cuenta?'}
-          </Text>
-          <TouchableOpacity
-            onPress={() => {
-              setErrorMsg('');
-              setIsRegisterMode(!isRegisterMode);
-            }}
-            className="ml-2 py-1 px-2"
-          >
-            <Text className="text-brand-500 font-semibold text-sm">
-              {isRegisterMode ? 'Iniciá Sesión' : 'Registrate gratis'}
+          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 12 }}>
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#64748B' }}>
+              {isRegisterMode ? '¿Ya tenés una cuenta? ' : '¿No tenés cuenta? '}
             </Text>
-          </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setErrorMsg(''); setIsRegisterMode(!isRegisterMode); }}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#2563EB' }}>
+                {isRegisterMode ? 'Iniciar Sesión' : 'Crear cuenta'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

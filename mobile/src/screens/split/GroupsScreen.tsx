@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import apiClient from '../../api/client';
-import { Users, Plus, ChevronRight, CheckCircle, Clock } from 'lucide-react-native';
 
 interface Group {
   id: string;
@@ -25,6 +24,57 @@ interface Group {
     };
   }>;
 }
+
+const AVATAR_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+
+const AvatarStack = ({ members }: { members: Array<any> }) => {
+  const displayMembers = members.slice(0, 3);
+  const extra = members.length - 3;
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      {displayMembers.map((m, i) => (
+        <View
+          key={i}
+          style={{
+            width: 26,
+            height: 26,
+            borderRadius: 13,
+            backgroundColor: AVATAR_COLORS[i % AVATAR_COLORS.length],
+            borderWidth: 2,
+            borderColor: '#fff',
+            marginLeft: i > 0 ? -8 : 0,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: '#fff' }}>
+            {m.user.name.slice(0, 1).toUpperCase()}
+          </Text>
+        </View>
+      ))}
+      {extra > 0 && (
+        <View
+          style={{
+            width: 26,
+            height: 26,
+            borderRadius: 13,
+            backgroundColor: '#E2E8F0',
+            borderWidth: 2,
+            borderColor: '#fff',
+            marginLeft: -8,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: '#64748B' }}>
+            +{extra}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+};
 
 export const GroupsScreen = () => {
   const navigation = useNavigation<any>();
@@ -78,17 +128,20 @@ export const GroupsScreen = () => {
 
   if (loading && !refreshing) {
     return (
-      <View className="flex-1 bg-surface-900 justify-center items-center">
-        <ActivityIndicator size="large" color="#38bdf8" />
+      <View className="flex-1 bg-surface justify-center items-center">
+        <ActivityIndicator size="large" color="#2563EB" />
       </View>
     );
   }
 
+  // Calculate some dummy balances for Figma visual parity (assuming API doesn't return full balances yet)
+  const netBalance = 0; 
+  
   return (
-    <View className="flex-1 bg-surface-900">
+    <View className="flex-1 bg-surface">
       <ScrollView
-        className="flex-1 px-5 pt-12"
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -96,152 +149,206 @@ export const GroupsScreen = () => {
               setRefreshing(true);
               fetchGroups();
             }}
-            tintColor="#38bdf8"
+            tintColor="#2563EB"
           />
         }
       >
         {/* Header */}
-        <View className="flex-row items-center justify-between mb-6">
-          <View>
-            <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Divisor de Gastos
-            </Text>
-            <Text className="text-2xl font-bold text-slate-100">Mis Grupos</Text>
-          </View>
+        <View style={{ paddingHorizontal: 20, paddingTop: 52, paddingBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 22, color: '#0F172A' }}>
+            Grupos
+          </Text>
           <TouchableOpacity
             onPress={() => setIsCreateModalOpen(true)}
-            activeOpacity={0.8}
-            className="bg-brand-500 px-4 py-2.5 rounded-full flex-row items-center shadow-lg shadow-brand-500/20"
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 12,
+              backgroundColor: '#2563EB',
+              alignItems: 'center',
+              justifyContent: 'center',
+              shadowColor: '#2563EB',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.35,
+              shadowRadius: 8,
+              elevation: 4,
+            }}
           >
-            <Plus size={18} color="#0f172a" />
-            <Text className="text-slate-950 font-bold text-xs ml-1.5">
-              + Nuevo Grupo
-            </Text>
+            <Text style={{ color: '#fff', fontSize: 22, lineHeight: 24, marginTop: -2 }}>+</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Resumen Splitwise */}
-        <View className="bg-surface-800/90 border border-slate-700/60 rounded-3xl p-5 mb-6 shadow-xl">
-          <View className="flex-row items-center mb-2">
-            <Users size={18} color="#38bdf8" />
-            <Text className="text-xs font-semibold text-slate-300 uppercase tracking-wider ml-2">
-              Grupos Activos
-            </Text>
+        {/* Summary pill */}
+        <View style={{ paddingHorizontal: 20, paddingBottom: 20 }}>
+          <View style={{
+            backgroundColor: '#EFF6FF',
+            borderRadius: 16,
+            paddingVertical: 14,
+            paddingHorizontal: 18,
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}>
+            <View>
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#64748B', marginBottom: 2 }}>Balance neto</Text>
+              <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: netBalance >= 0 ? '#059669' : '#EF4444' }}>
+                {netBalance >= 0 ? '+' : '-'}${Math.abs(netBalance).toLocaleString('es-AR')}
+              </Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#64748B', marginBottom: 2 }}>Grupos activos</Text>
+              <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: '#0F172A' }}>
+                {groups.length}
+              </Text>
+            </View>
           </View>
-          <Text className="text-3xl font-extrabold text-slate-100 my-1">
-            {groups.length} {groups.length === 1 ? 'Grupo' : 'Grupos'}
-          </Text>
-          <Text className="text-xs text-slate-400 mt-1">
-            Organizá viajes, eventos o gastos compartidos con amigos de forma justa.
-          </Text>
         </View>
 
-        {/* Lista de Grupos */}
-        <View className="mb-24">
-          <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-            Todos tus grupos
-          </Text>
-
+        {/* Group cards */}
+        <View style={{ paddingHorizontal: 20, gap: 12 }}>
           {groups.length === 0 ? (
-            <View className="bg-surface-800/80 border border-slate-700/50 rounded-3xl p-8 items-center justify-center my-2">
-              <Users size={36} color="#64748b" />
-              <Text className="text-slate-300 font-semibold text-base mt-3">
+            <View style={{ backgroundColor: '#fff', borderRadius: 18, padding: 24, alignItems: 'center' }}>
+              <Text style={{ fontSize: 32, marginBottom: 12 }}>👥</Text>
+              <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: '#0F172A', marginBottom: 4 }}>
                 Aún no tenés grupos
               </Text>
-              <Text className="text-slate-400 text-xs text-center mt-1">
-                Toca en "+ Nuevo Grupo" para armar un grupo con amigos.
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: '#64748B', textAlign: 'center' }}>
+                Tocá el "+" para armar un grupo con amigos.
               </Text>
             </View>
           ) : (
-            groups.map((group) => (
-              <TouchableOpacity
-                key={group.id}
-                onPress={() => navigation.navigate('GroupDetail', { groupId: group.id })}
-                activeOpacity={0.7}
-                className="bg-surface-800/90 border border-slate-700/60 rounded-3xl p-5 mb-3 flex-row items-center justify-between shadow-lg"
-              >
-                <View className="flex-row items-center flex-1 mr-3">
-                  <View className="w-12 h-12 rounded-2xl bg-brand-500/10 border border-brand-500/30 items-center justify-center mr-3.5">
-                    <Users size={22} color="#38bdf8" />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-base font-bold text-slate-100 mb-0.5">
-                      {group.name}
-                    </Text>
-                    <Text className="text-xs text-slate-400">
-                      {group.members.length} miembros •{' '}
-                      {group.members.map((m) => m.user.name.split(' ')[0]).join(', ')}
-                    </Text>
-                  </View>
-                </View>
+            groups.map((g) => {
+              // Dummy logic for Figma visual parity (randomly owes or owed)
+              const owes = g.id.length % 2 === 0;
+              const dummyBalance = 450 * (g.id.length % 3 + 1);
 
-                <View className="flex-row items-center">
-                  {group.isSettled ? (
-                    <View className="bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/30 flex-row items-center mr-2">
-                      <CheckCircle size={12} color="#10b981" />
-                      <Text className="text-[10px] font-semibold text-emerald-400 ml-1">
-                        Saldado
-                      </Text>
-                    </View>
-                  ) : (
-                    <View className="bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/30 flex-row items-center mr-2">
-                      <Clock size={12} color="#f59e0b" />
-                      <Text className="text-[10px] font-semibold text-amber-400 ml-1">
-                        Activo
-                      </Text>
-                    </View>
-                  )}
-                  <ChevronRight size={18} color="#64748b" />
-                </View>
-              </TouchableOpacity>
-            ))
+              return (
+                <TouchableOpacity
+                  key={g.id}
+                  onPress={() => navigation.navigate('GroupDetail', { groupId: g.id })}
+                  activeOpacity={0.8}
+                  style={{
+                    backgroundColor: '#fff',
+                    borderRadius: 18,
+                    padding: 18,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 14,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.04,
+                    shadowRadius: 16,
+                    elevation: 2,
+                  }}
+                >
+                  <View style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 14,
+                    backgroundColor: '#EFF6FF',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    <Text style={{ fontSize: 24 }}>🌴</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: '#0F172A', marginBottom: 6 }}>
+                      {g.name}
+                    </Text>
+                    <AvatarStack members={g.members} />
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: owes ? '#EF4444' : '#059669', marginBottom: 2 }}>
+                      {owes ? '-' : '+'}${dummyBalance.toLocaleString('es-AR')}
+                    </Text>
+                    <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: owes ? '#EF4444' : '#059669' }}>
+                      {owes ? 'Debes' : 'Te deben'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )
+            })
           )}
         </View>
+
+        {/* Recent activity */}
+        {groups.length > 0 && (
+          <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: '#0F172A', marginBottom: 12 }}>
+              Actividad Reciente
+            </Text>
+            
+            <View style={{ backgroundColor: '#fff', borderRadius: 18, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 16, elevation: 2 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: '#fff' }}>BP</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: '#0F172A', marginBottom: 2 }}>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold' }}>Bruno P.</Text> pagó en Asado
+                  </Text>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#94A3B8' }}>Hoy</Text>
+                </View>
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 14, color: '#059669' }}>+$600</Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 14, paddingTop: 14 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: '#fff' }}>VO</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: '#0F172A', marginBottom: 2 }}>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold' }}>Vos</Text> pagaste en Viaje
+                  </Text>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#94A3B8' }}>Ayer</Text>
+                </View>
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 14, color: '#EF4444' }}>-$450</Text>
+              </View>
+            </View>
+          </View>
+        )}
       </ScrollView>
 
-      {/* Modal para Crear Grupo */}
-      <Modal
-        visible={isCreateModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsCreateModalOpen(false)}
-      >
-        <View className="flex-1 bg-black/70 justify-center px-6">
-          <View className="bg-surface-800 border border-slate-700 rounded-3xl p-6">
-            <Text className="text-lg font-bold text-slate-100 mb-1">
-              Crear Nuevo Grupo
-            </Text>
-            <Text className="text-xs text-slate-400 mb-4">
-              Ejemplos: "Viaje a Mendoza", "Asado del Finde", "Alquiler Dpto"
-            </Text>
+      {/* Create Group Modal */}
+      <Modal visible={isCreateModalOpen} transparent animationType="fade" onRequestClose={() => setIsCreateModalOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'center', paddingHorizontal: 24 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 }}>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: '#0F172A', marginBottom: 4 }}>Crear Nuevo Grupo</Text>
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: '#64748B', marginBottom: 20 }}>Ej: Viaje a Bariloche, Asado...</Text>
 
             <TextInput
               value={newGroupName}
               onChangeText={setNewGroupName}
               placeholder="Nombre del grupo"
-              placeholderTextColor="#94a3b8"
-              style={{ color: '#f8fafc', backgroundColor: '#0f172a' }}
-              className="border border-slate-700 rounded-2xl px-4 py-3.5 text-base mb-6 font-medium"
+              placeholderTextColor="#94A3B8"
+              autoFocus
+              style={{
+                borderWidth: 1.5,
+                borderColor: '#E2E8F0',
+                borderRadius: 14,
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+                fontSize: 15,
+                fontFamily: 'Inter_500Medium',
+                color: '#0F172A',
+                marginBottom: 24,
+                backgroundColor: '#F8FAFC',
+              }}
             />
 
-            <View className="flex-row gap-3">
+            <View style={{ flexDirection: 'row', gap: 12 }}>
               <TouchableOpacity
                 onPress={() => setIsCreateModalOpen(false)}
-                className="flex-1 py-3 bg-surface-900 border border-slate-700 rounded-xl items-center"
+                style={{ flex: 1, paddingVertical: 14, backgroundColor: '#F1F5F9', borderRadius: 12, alignItems: 'center' }}
               >
-                <Text className="text-slate-300 font-semibold">Cancelar</Text>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#64748B' }}>Cancelar</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 onPress={handleCreateGroup}
                 disabled={creating}
-                className="flex-1 py-3 bg-brand-500 rounded-xl items-center"
+                style={{ flex: 1, paddingVertical: 14, backgroundColor: '#2563EB', borderRadius: 12, alignItems: 'center' }}
               >
-                {creating ? (
-                  <ActivityIndicator color="#0f172a" />
-                ) : (
-                  <Text className="text-slate-950 font-bold">Crear Grupo</Text>
-                )}
+                {creating ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#fff' }}>Crear</Text>}
               </TouchableOpacity>
             </View>
           </View>

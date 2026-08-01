@@ -14,50 +14,58 @@ interface SpendingChartProps {
   totalExpense: number;
 }
 
-const PALETTE = [
-  '#38bdf8', // sky-400
-  '#f43f5e', // rose-500
-  '#a855f7', // purple-500
-  '#f59e0b', // amber-500
-  '#10b981', // emerald-500
-  '#ec4899', // pink-500
-  '#6366f1', // indigo-500
-  '#14b8a6', // teal-500
-];
+const CATEGORY_COLORS: Record<string, string> = {
+  Comida: '#2563EB',
+  Transporte: '#7C3AED',
+  Entretenimiento: '#DB2777',
+  Salud: '#059669',
+  Hogar: '#D97706',
+  Otro: '#64748B',
+};
+
+const DEFAULT_COLORS = ['#2563EB', '#7C3AED', '#DB2777', '#059669', '#D97706', '#64748B'];
 
 export const SpendingChart: React.FC<SpendingChartProps> = ({ categories, totalExpense }) => {
-  // Filtrar solo gastos para el gráfico de "dónde se va tu plata"
-  const expensesOnly = categories.filter((c) => c.type === 'EXPENSE' && c.total > 0);
+  const expensesOnly = categories.filter((c) => c.type === 'EXPENSE' && c.total > 0).sort((a, b) => b.total - a.total);
 
   if (expensesOnly.length === 0 || totalExpense <= 0) {
     return (
-      <View className="bg-surface-800/80 border border-slate-700/50 rounded-3xl p-6 items-center justify-center my-4">
-        <Text className="text-slate-400 text-sm text-center">
+      <View style={{
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.04,
+        shadowRadius: 16,
+        elevation: 2,
+      }}>
+        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#94A3B8' }}>
           No hay gastos registrados en este período
         </Text>
       </View>
     );
   }
 
-  // Generar arcos SVG para el gráfico de dona
-  const size = 160;
-  const strokeWidth = 24;
+  const size = 140;
+  const strokeWidth = 22;
   const radius = (size - strokeWidth) / 2;
   const center = size / 2;
-  const circumference = 2 * Math.PI * radius;
 
   let cumulativeAngle = -Math.PI / 2;
 
   const arcs = expensesOnly.map((cat, i) => {
     const percentage = cat.total / totalExpense;
-    const angle = percentage * 2 * Math.PI;
-
+    // Add small gap by reducing angle slightly if there's more than one category
+    const angle = percentage * 2 * Math.PI - (expensesOnly.length > 1 ? 0.04 : 0);
+    
     const startAngle = cumulativeAngle;
     const endAngle = cumulativeAngle + angle;
 
-    cumulativeAngle += angle;
+    cumulativeAngle += (percentage * 2 * Math.PI); // increment by true amount for next arc
 
-    // Calcular coordenadas del arco
     const x1 = center + radius * Math.cos(startAngle);
     const y1 = center + radius * Math.sin(startAngle);
     const x2 = center + radius * Math.cos(endAngle);
@@ -70,23 +78,37 @@ export const SpendingChart: React.FC<SpendingChartProps> = ({ categories, totalE
       `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
     ].join(' ');
 
+    const color = CATEGORY_COLORS[cat.name] || DEFAULT_COLORS[i % DEFAULT_COLORS.length];
+
     return {
       pathData,
-      color: PALETTE[i % PALETTE.length],
-      percentage: (percentage * 100).toFixed(1),
+      color,
       category: cat,
     };
   });
 
   return (
-    <View className="bg-surface-800/80 border border-slate-700/50 rounded-3xl p-5 my-4 shadow-xl">
-      <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">
-        ¿Dónde se va tu plata?
+    <View style={{
+      backgroundColor: '#fff',
+      borderRadius: 20,
+      paddingVertical: 20,
+      paddingHorizontal: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.04,
+      shadowRadius: 16,
+      elevation: 2,
+    }}>
+      <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: '#0F172A', marginBottom: 2 }}>
+        Gastos por Categoría
+      </Text>
+      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#94A3B8', marginBottom: 12 }}>
+        Este mes
       </Text>
 
-      <View className="flex-row items-center justify-around">
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
         {/* SVG Donut Chart */}
-        <View className="items-center justify-center relative">
+        <View style={{ width: size, height: size, position: 'relative' }}>
           <Svg width={size} height={size}>
             <G>
               {arcs.map((arc, idx) => (
@@ -96,38 +118,33 @@ export const SpendingChart: React.FC<SpendingChartProps> = ({ categories, totalE
                   stroke={arc.color}
                   strokeWidth={strokeWidth}
                   fill="none"
-                  strokeLinecap="round"
+                  strokeLinecap="butt"
                 />
               ))}
             </G>
           </Svg>
-          <View className="absolute items-center justify-center">
-            <Text className="text-xs text-slate-400">Gastos</Text>
-            <Text className="text-base font-bold text-rose-400">
-              ${totalExpense.toLocaleString('es-AR')}
-            </Text>
-          </View>
         </View>
 
         {/* Legend */}
-        <View className="flex-1 ml-4 justify-center">
-          {expensesOnly.slice(0, 5).map((cat, i) => (
-            <View key={cat.name} className="flex-row items-center my-1">
-              <View
-                className="w-3 h-3 rounded-full mr-2"
-                style={{ backgroundColor: PALETTE[i % PALETTE.length] }}
-              />
-              <Text className="text-xs text-slate-300 flex-1 numberOfLines={1}">
-                {cat.icon ? `${cat.icon} ` : ''}
-                {cat.name}
-              </Text>
-              <Text className="text-xs font-semibold text-slate-200 ml-1">
-                ${cat.total.toLocaleString('es-AR')}
-              </Text>
-            </View>
-          ))}
+        <View style={{ flex: 1, gap: 7 }}>
+          {expensesOnly.slice(0, 5).map((cat, i) => {
+            const color = CATEGORY_COLORS[cat.name] || DEFAULT_COLORS[i % DEFAULT_COLORS.length];
+            return (
+              <View key={cat.name} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, flex: 1 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#475569' }} numberOfLines={1}>
+                    {cat.name}
+                  </Text>
+                </View>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#0F172A' }}>
+                  ${cat.total.toLocaleString('es-AR')}
+                </Text>
+              </View>
+            );
+          })}
           {expensesOnly.length > 5 && (
-            <Text className="text-xs text-slate-500 mt-1">
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
               + {expensesOnly.length - 5} categorías más
             </Text>
           )}

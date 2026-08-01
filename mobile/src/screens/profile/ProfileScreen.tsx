@@ -1,88 +1,233 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
-import { User as UserIcon, Mail, Calendar, LogOut } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export const ProfileScreen = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
-  const handleLogout = () => {
-    Alert.alert('Cerrar Sesión', '¿Estás seguro de que querés salir?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Cerrar Sesión', style: 'destructive', onPress: logout },
-    ]);
-  };
+  const MONTHLY = [
+    { month: 'Feb', value: 3200, color: '#BFDBFE' },
+    { month: 'Mar', value: 4100, color: '#BFDBFE' },
+    { month: 'Abr', value: 2900, color: '#BFDBFE' },
+    { month: 'May', value: 5100, color: '#BFDBFE' },
+    { month: 'Jun', value: 3800, color: '#BFDBFE' },
+    { month: 'Jul', value: 1300, color: '#2563EB' },
+  ];
+  const maxVal = Math.max(...MONTHLY.map((m) => m.value));
 
-  const formattedDate = user?.createdAt
-    ? new Date(user.createdAt).toLocaleDateString('es-AR', {
-        month: 'long',
-        year: 'numeric',
-      })
-    : 'Recientemente';
+  const BADGES = [
+    { icon: '🏆', label: 'Ahorrador', desc: '3 meses seguidos bajo presupuesto' },
+    { icon: '📊', label: 'Analítico', desc: '30 días registrando gastos' },
+    { icon: '🤝', label: 'Social', desc: '5 grupos creados' },
+  ];
+
+  const SAVINGS = [
+    { label: 'Vacaciones 🏖️', current: 12000, goal: 30000, color: '#2563EB' },
+    { label: 'Notebook 💻', current: 45000, goal: 60000, color: '#059669' },
+  ];
 
   return (
-    <View className="flex-1 bg-surface-900 px-5 pt-12">
-      <View className="mb-6">
-        <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-          Mi Perfil
-        </Text>
-        <Text className="text-2xl font-bold text-slate-100">Usuario</Text>
-      </View>
-
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* User Card Header */}
-        <View className="bg-surface-800/90 border border-slate-700/60 rounded-3xl p-6 items-center mb-6 shadow-xl">
-          <View className="w-20 h-20 rounded-full bg-brand-500/20 border-2 border-brand-500 items-center justify-center mb-3">
-            <Text className="text-3xl font-bold text-brand-400">
-              {user?.name ? user.name[0].toUpperCase() : 'U'}
-            </Text>
-          </View>
-          <Text className="text-xl font-bold text-slate-100">{user?.name}</Text>
-          <Text className="text-sm text-slate-400 mt-0.5">{user?.email}</Text>
-        </View>
-
-        {/* Details Card */}
-        <View className="bg-surface-800/80 border border-slate-700/50 rounded-3xl p-5 mb-8">
-          <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">
-            Información de la Cuenta
-          </Text>
-
-          <View className="flex-row items-center py-3 border-b border-slate-700/30">
-            <UserIcon size={18} color="#94a3b8" />
-            <View className="ml-3 flex-1">
-              <Text className="text-xs text-slate-400">Nombre Completo</Text>
-              <Text className="text-sm font-semibold text-slate-200">{user?.name}</Text>
-            </View>
-          </View>
-
-          <View className="flex-row items-center py-3 border-b border-slate-700/30">
-            <Mail size={18} color="#94a3b8" />
-            <View className="ml-3 flex-1">
-              <Text className="text-xs text-slate-400">Correo Electrónico</Text>
-              <Text className="text-sm font-semibold text-slate-200">{user?.email}</Text>
-            </View>
-          </View>
-
-          <View className="flex-row items-center py-3">
-            <Calendar size={18} color="#94a3b8" />
-            <View className="ml-3 flex-1">
-              <Text className="text-xs text-slate-400">Miembro Desde</Text>
-              <Text className="text-sm font-semibold text-slate-200">{formattedDate}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Logout Button */}
-        <TouchableOpacity
-          onPress={handleLogout}
-          activeOpacity={0.8}
-          className="bg-rose-500/10 border border-rose-500/30 py-4 rounded-2xl flex-row justify-center items-center mb-24"
+    <View className="flex-1 bg-surface">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+        
+        {/* Hero Section */}
+        <LinearGradient
+          colors={['#1D4ED8', '#2563EB', '#7C3AED']}
+          start={{ x: 0.2, y: 0 }}
+          end={{ x: 0.8, y: 1 }}
+          style={{ paddingHorizontal: 20, paddingTop: 60, paddingBottom: 32, alignItems: 'center' }}
         >
-          <LogOut size={18} color="#f43f5e" />
-          <Text className="text-rose-400 font-bold text-base ml-2">
-            Cerrar Sesión
+          <View style={{ marginBottom: 16, position: 'relative' }}>
+            <LinearGradient
+              colors={['#7C3AED', '#2563EB']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: 40,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 3,
+                borderColor: 'rgba(255,255,255,0.3)',
+              }}
+            >
+              <Text style={{ fontSize: 34 }}>👩‍💼</Text>
+            </LinearGradient>
+            <View style={{
+              position: 'absolute',
+              bottom: 0,
+              right: 0,
+              width: 24,
+              height: 24,
+              borderRadius: 12,
+              backgroundColor: '#fff',
+              alignItems: 'center',
+              justifyContent: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.15,
+              shadowRadius: 6,
+              elevation: 2,
+            }}>
+              <Text style={{ fontSize: 10 }}>✏️</Text>
+            </View>
+          </View>
+          
+          <Text style={{ fontFamily: 'Outfit_800ExtraBold', fontSize: 22, color: '#fff', marginBottom: 4 }}>
+            {user?.name || 'Ana M. Rodríguez'}
           </Text>
-        </TouchableOpacity>
+          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: 'rgba(255,255,255,0.72)' }}>
+            {user?.email || 'ana.rodriguez@finova.app'}
+          </Text>
+
+          {/* Stats row */}
+          <View style={{
+            flexDirection: 'row',
+            backgroundColor: 'rgba(255,255,255,0.12)',
+            borderRadius: 16,
+            marginTop: 20,
+            width: '100%',
+          }}>
+            {[
+              { label: 'Grupos', value: '3' },
+              { label: 'Gastos', value: '47' },
+              { label: 'Ahorrado', value: '$2.4k' },
+            ].map((s, i) => (
+              <View
+                key={s.label}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  alignItems: 'center',
+                  borderRightWidth: i < 2 ? 1 : 0,
+                  borderRightColor: 'rgba(255,255,255,0.12)',
+                }}
+              >
+                <Text style={{ fontFamily: 'Outfit_800ExtraBold', fontSize: 18, color: '#fff', marginBottom: 2 }}>{s.value}</Text>
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.65)' }}>{s.label}</Text>
+              </View>
+            ))}
+          </View>
+        </LinearGradient>
+
+        {/* Monthly spend bar chart */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16 }}>
+          <View style={{
+            backgroundColor: '#fff',
+            borderRadius: 20,
+            padding: 18,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.04,
+            shadowRadius: 16,
+            elevation: 2,
+          }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 20 }}>
+              <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: '#0F172A' }}>
+                Historial de Gastos
+              </Text>
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#64748B' }}>Últimos 6 meses</Text>
+            </View>
+            
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 100, gap: 8 }}>
+              {MONTHLY.map((m) => {
+                const height = (m.value / maxVal) * 84;
+                return (
+                  <View key={m.month} style={{ flex: 1, alignItems: 'center' }}>
+                    <View style={{ width: '100%', height, backgroundColor: m.color, borderTopLeftRadius: 6, borderTopRightRadius: 6, borderBottomLeftRadius: 4, borderBottomRightRadius: 4, marginBottom: 6 }} />
+                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 10, color: '#94A3B8' }}>{m.month}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+
+        {/* Savings goal */}
+        <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
+          <View style={{
+            backgroundColor: '#fff',
+            borderRadius: 20,
+            padding: 18,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.04,
+            shadowRadius: 16,
+            elevation: 2,
+          }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: '#0F172A' }}>
+                Meta de Ahorro
+              </Text>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#2563EB' }}>Julio</Text>
+            </View>
+            
+            {SAVINGS.map((g, i) => {
+              const pct = Math.round((g.current / g.goal) * 100);
+              return (
+                <View key={g.label} style={{ marginBottom: i === SAVINGS.length - 1 ? 0 : 16 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: '#0F172A' }}>{g.label}</Text>
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 13, color: g.color }}>{pct}%</Text>
+                  </View>
+                  <View style={{ height: 8, borderRadius: 4, backgroundColor: '#F1F5F9', overflow: 'hidden' }}>
+                    <View style={{ height: '100%', width: `${pct}%`, borderRadius: 4, backgroundColor: g.color }} />
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: '#94A3B8' }}>
+                      ${g.current.toLocaleString('es-AR')}
+                    </Text>
+                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: '#94A3B8' }}>
+                      ${g.goal.toLocaleString('es-AR')}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Badges */}
+        <View style={{ paddingHorizontal: 20, paddingBottom: 24 }}>
+          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: '#0F172A', marginBottom: 12 }}>
+            Logros
+          </Text>
+          <View style={{ gap: 8 }}>
+            {BADGES.map((b) => (
+              <View key={b.label} style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#fff',
+                borderRadius: 14,
+                padding: 12,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.05,
+                shadowRadius: 3,
+                elevation: 1,
+              }}>
+                <View style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 12,
+                  backgroundColor: '#EFF6FF',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 12,
+                }}>
+                  <Text style={{ fontSize: 22 }}>{b.icon}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#0F172A', marginBottom: 2 }}>{b.label}</Text>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: '#94A3B8' }}>{b.desc}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+
       </ScrollView>
     </View>
   );
