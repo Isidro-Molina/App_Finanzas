@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { useFocusEffect } from '@react-navigation/native';
 import apiClient from '../../api/client';
-import { Trophy, BarChart2, Users } from 'lucide-react-native';
+import { Trophy, BarChart2, Users, TrendingUp } from 'lucide-react-native';
 
 interface MonthlySummary {
   month: number;
@@ -134,7 +134,7 @@ export const ProfileScreen = () => {
           <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
             <View style={{ backgroundColor: '#ECFDF5', borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#D1FAE5', alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 20 }}>💚</Text>
+                <TrendingUp size={20} color="#059669" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#065F46', marginBottom: 2 }}>
