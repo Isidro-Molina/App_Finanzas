@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 /**
@@ -43,6 +44,19 @@ export class UsersController {
     @Body() dto: UpdateUserDto,
   ) {
     return this.usersService.update(req.user.userId, dto);
+  }
+
+  /**
+   * PATCH /api/v1/users/me/password
+   * Cambia la contraseña del usuario autenticado.
+   * Requiere la contraseña actual para confirmar la identidad.
+   */
+  @Patch('me/password')
+  changePassword(
+    @Request() req: { user: { userId: string } },
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.usersService.changePassword(req.user.userId, dto);
   }
 
   /**

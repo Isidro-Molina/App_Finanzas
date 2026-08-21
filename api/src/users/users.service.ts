@@ -1,6 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
@@ -69,6 +71,23 @@ export class UsersService {
         updatedAt: true,
       },
     });
+  }
+
+  /**
+   * Cambia la contraseña del usuario.
+   * Verifica la contraseña actual antes de permitir el cambio.
+   */
+  async changePassword(id: string, dto: ChangePasswordDto) {
+    // Buscar con passwordHash (findByEmail retorna el objeto completo)
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+    if (!valid) throw new UnauthorizedException('La contraseña actual es incorrecta');
+
+    const newHash = await bcrypt.hash(dto.newPassword, 12);
+    await this.prisma.user.update({ where: { id }, data: { passwordHash: newHash } });
+    return { message: 'Contraseña actualizada correctamente' };
   }
 
   /**
