@@ -57,9 +57,25 @@ function getCategoryColor(icon: string | null, index: number): string {
   return palette[index % palette.length];
 }
 
+const Skeleton = ({ width, height, borderRadius, marginBottom = 0, style = {} }: any) => {
+  const { colors, isDark } = useTheme();
+  return (
+    <View
+      style={{
+        width,
+        height,
+        borderRadius,
+        marginBottom,
+        backgroundColor: isDark ? '#334155' : '#E2E8F0',
+        ...style
+      }}
+    />
+  );
+};
+
 export const DashboardScreen = () => {
   const navigation = useNavigation<any>();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -74,12 +90,14 @@ export const DashboardScreen = () => {
   const [currentYear, setCurrentYear] = useState(now.getFullYear());
 
   const goToPrevMonth = () => {
+    setLoading(true);
     if (currentMonth === 1) { setCurrentMonth(12); setCurrentYear((y) => y - 1); }
     else setCurrentMonth((m) => m - 1);
   };
   const goToNextMonth = () => {
     const isCurrentMonth = currentMonth === now.getMonth() + 1 && currentYear === now.getFullYear();
     if (isCurrentMonth) return; // can't go forward beyond today
+    setLoading(true);
     if (currentMonth === 12) { setCurrentMonth(1); setCurrentYear((y) => y + 1); }
     else setCurrentMonth((m) => m + 1);
   };
@@ -123,11 +141,63 @@ export const DashboardScreen = () => {
 
   if (loading && !refreshing) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={colors.brand} />
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: colors.textMuted, marginTop: 12 }}>
-          Cargando tus finanzas...
-        </Text>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        {/* Top bar */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 }}>
+          <Skeleton width={150} height={28} borderRadius={8} marginBottom={8} />
+          <Skeleton width={100} height={18} borderRadius={6} />
+        </View>
+
+        {/* Card */}
+        <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
+          <Skeleton width="100%" height={140} borderRadius={20} />
+        </View>
+
+        {/* Donut chart */}
+        <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
+          <View style={{ backgroundColor: colors.bgCard, borderRadius: 20, paddingVertical: 20, paddingHorizontal: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 }}>
+            <Skeleton width={130} height={18} borderRadius={6} marginBottom={4} />
+            <Skeleton width={60} height={12} borderRadius={4} marginBottom={16} />
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+              {/* Donut ring */}
+              <View style={{ width: 140, height: 140, borderRadius: 70, borderWidth: 22, borderColor: isDark ? '#334155' : '#E2E8F0', backgroundColor: 'transparent' }} />
+              
+              {/* Legend lines */}
+              <View style={{ flex: 1, gap: 12 }}>
+                {[1, 2, 3, 4].map((i) => (
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                      <Skeleton width={8} height={8} borderRadius={4} />
+                      <Skeleton width={80} height={12} borderRadius={4} />
+                    </View>
+                    <Skeleton width={24} height={12} borderRadius={4} />
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Header txs */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 }}>
+          <Skeleton width={120} height={20} borderRadius={6} />
+        </View>
+
+        {/* Txs list */}
+        <View style={{ paddingHorizontal: 20, gap: 8 }}>
+          {[1, 2, 3, 4].map((i) => (
+            <View key={i} style={{ backgroundColor: colors.bgCard, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Skeleton width={42} height={42} borderRadius={12} />
+              <View style={{ flex: 1 }}>
+                <Skeleton width={60} height={14} borderRadius={4} marginBottom={8} />
+                <Skeleton width={120} height={16} borderRadius={4} marginBottom={4} />
+                <Skeleton width={80} height={12} borderRadius={4} />
+              </View>
+              <Skeleton width={60} height={20} borderRadius={6} />
+            </View>
+          ))}
+        </View>
       </View>
     );
   }
