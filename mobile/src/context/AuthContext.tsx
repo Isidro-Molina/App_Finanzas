@@ -16,6 +16,7 @@ interface AuthContextData {
   isLoading: boolean;
   biometricEnabled: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithToken: (token: string, user: User) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -74,6 +75,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await saveSession(accessToken, userData);
   }
 
+  /** Used after Google OAuth or any external auth that already has a token */
+  async function loginWithToken(accessToken: string, userData: User) {
+    await saveSession(accessToken, userData);
+  }
+
   async function register(name: string, email: string, password: string) {
     const response = await apiClient.post('/auth/register', { name, email, password });
     const { accessToken, user: userData } = response.data;
@@ -98,14 +104,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
-  /** Check if device supports biometric auth */
   async function isBiometricAvailable(): Promise<boolean> {
     const compatible = await LocalAuthentication.hasHardwareAsync();
     const enrolled = await LocalAuthentication.isEnrolledAsync();
     return compatible && enrolled;
   }
 
-  /** Store credentials encrypted → enable biometric login */
   async function enableBiometric(email: string, password: string) {
     await SecureStore.setItemAsync(BIOMETRIC_EMAIL_KEY, email);
     await SecureStore.setItemAsync(BIOMETRIC_PASS_KEY, password);
@@ -113,7 +117,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setBiometricEnabled(true);
   }
 
-  /** Clear stored biometric credentials */
   async function disableBiometric() {
     await SecureStore.deleteItemAsync(BIOMETRIC_EMAIL_KEY);
     await SecureStore.deleteItemAsync(BIOMETRIC_PASS_KEY);
@@ -121,7 +124,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setBiometricEnabled(false);
   }
 
-  /** Authenticate with biometrics, then auto-login using stored credentials */
   async function loginWithBiometric(): Promise<boolean> {
     try {
       const result = await LocalAuthentication.authenticateAsync({
@@ -154,6 +156,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         biometricEnabled,
         login,
+        loginWithToken,
         register,
         logout,
         refreshProfile,

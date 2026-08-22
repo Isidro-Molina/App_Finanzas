@@ -5,11 +5,13 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { OAuth2Client } from 'google-auth-library';
 
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UsersService } from 'src/users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { GoogleAuthDto } from './dto/google-auth.dto';
 import { JwtPayload } from './strategies/jwt.strategy';
 
 // Proyección de usuario segura (sin passwordHash)
@@ -23,11 +25,15 @@ const SAFE_USER_SELECT = {
 
 @Injectable()
 export class AuthService {
+  private googleClient: OAuth2Client;
+
   constructor(
     private prisma: PrismaService,
     private usersService: UsersService,
     private jwtService: JwtService,
-  ) {}
+  ) {
+    this.googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+  }
 
   // ─── Registro ────────────────────────────────────────────────────────────
 
@@ -80,6 +86,50 @@ export class AuthService {
 
     return {
       accessToken: this.generateToken(user.id, user.email),
+      user: safeUser,
+    };
+  }
+
+  // ─── Google OAuth ─────────────────────────────────────────────────────────
+
+  async googleAuth(dto: GoogleAuthDto) {
+    // 1. Verificar el idToken con Google
+    let ticket: any;
+    try {
+      ticket = await this.googleClient.verifyIdToken({
+        idToken: dto.idToken,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+    } catch {
+      throw new UnauthorizedException('Token de Google inválido o expirado');
+    }
+
+    const payload = ticket.getPayload();
+    const { email, name, sub: googleId } = payload;
+
+    if (!email) {
+      throw new UnauthorizedException('No se pudo obtener el email de Google');
+    }
+
+    // 2. Buscar o crear el usuario
+    let user = await this.usersService.findByEmail(email);
+
+    if (!user) {
+      // Usuario nuevo → crear sin passwordHash (acceso solo via Google)
+      user = await this.prisma.user.create({
+        data: {
+          email,
+          name: name || email.split('@')[0],
+          passwordHash: '', // Vacío: no puede hacer login con contraseña
+        },
+      });
+    }
+
+    // 3. Proyección segura
+    const { passwordHash: _, ...safeUser } = user;
+
+    return {
+      accessToken: this.generateToken(safeUser.id, safeUser.email),
       user: safeUser,
     };
   }

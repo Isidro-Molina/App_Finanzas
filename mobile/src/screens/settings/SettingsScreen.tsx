@@ -165,7 +165,7 @@ export const SettingsScreen = () => {
             <Row icon={Lock} label="Cambiar contraseña" onPress={() => navigation.navigate('ChangePassword')} />
             <Row
               icon={Mail}
-              label="Email vinculado"
+              label="Email"
               right={<Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>{user?.email || 'usuario@finova.app'}</Text>}
               border={false}
             />
