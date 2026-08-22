@@ -15,6 +15,8 @@ import { SettingsScreen } from '../screens/settings/SettingsScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
 import { AddCategoryScreen } from '../screens/finances/AddCategoryScreen';
 import { ManageCategoriesScreen } from '../screens/finances/ManageCategoriesScreen';
+import { EditProfileScreen } from '../screens/settings/EditProfileScreen';
+import { ChangePasswordScreen } from '../screens/settings/ChangePasswordScreen';
 
 import { Wallet, Users, Settings, User } from 'lucide-react-native';
 
@@ -123,6 +125,16 @@ export const RootNavigator = () => {
           <RootStack.Screen
             name="ManageCategories"
             component={ManageCategoriesScreen}
+            options={{ presentation: 'modal' }}
+          />
+          <RootStack.Screen
+            name="EditProfile"
+            component={EditProfileScreen}
+            options={{ presentation: 'modal' }}
+          />
+          <RootStack.Screen
+            name="ChangePassword"
+            component={ChangePasswordScreen}
             options={{ presentation: 'modal' }}
           />
         </>

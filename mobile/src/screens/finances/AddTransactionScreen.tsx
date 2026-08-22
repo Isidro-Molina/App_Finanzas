@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import apiClient from '../../api/client';
-import { ArrowLeft, Calendar } from 'lucide-react-native';
+import { ArrowLeft, Calendar, Clock } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -30,19 +30,21 @@ function getCategoryColor(icon: string | null, index: number): string {
 
 export const AddTransactionScreen: React.FC = () => {
   const navigation = useNavigation<any>();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
   const [type, setType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchingCategories, setFetchingCategories] = useState(true);
 
   const formattedDate = selectedDate.toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const formattedTime = selectedDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
 
   useFocusEffect(
     React.useCallback(() => {
@@ -222,29 +224,73 @@ export const AddTransactionScreen: React.FC = () => {
           )}
         </View>
 
-        {/* Date picker */}
+        {/* Date + Time pickers */}
         <View style={{ ...cardStyle, padding: 18 }}>
           <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Fecha
+            Fecha y Hora
           </Text>
-          <TouchableOpacity
-            onPress={() => setShowDatePicker(true)}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.bgInput, borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13 }}
-          >
-            <Calendar size={18} color={colors.brand} />
-            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 15, color: colors.textPrimary, flex: 1 }}>
-              {formattedDate}
-            </Text>
-          </TouchableOpacity>
+
+          {/* Two buttons side by side */}
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {/* Date button */}
+            <TouchableOpacity
+              onPress={() => { setShowTimePicker(false); setShowDatePicker(true); }}
+              style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.bgInput, borderWidth: 1.5, borderColor: showDatePicker ? colors.brand : colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12 }}
+            >
+              <Calendar size={16} color={colors.brand} />
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: colors.textPrimary, flex: 1 }} numberOfLines={1}>
+                {formattedDate}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Time button */}
+            <TouchableOpacity
+              onPress={() => { setShowDatePicker(false); setShowTimePicker(true); }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.bgInput, borderWidth: 1.5, borderColor: showTimePicker ? colors.brand : colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12 }}
+            >
+              <Clock size={16} color={colors.brand} />
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: colors.textPrimary }}>
+                {formattedTime}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Date picker */}
           {showDatePicker && (
             <DateTimePicker
               value={selectedDate}
               mode="date"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               maximumDate={new Date()}
+              themeVariant={isDark ? 'dark' : 'light'}
               onChange={(event, date) => {
                 setShowDatePicker(Platform.OS === 'ios');
-                if (date) setSelectedDate(date);
+                if (date) {
+                  // Preserve time when changing date
+                  const merged = new Date(date);
+                  merged.setHours(selectedDate.getHours(), selectedDate.getMinutes());
+                  setSelectedDate(merged);
+                }
+              }}
+            />
+          )}
+
+          {/* Time picker */}
+          {showTimePicker && (
+            <DateTimePicker
+              value={selectedDate}
+              mode="time"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              is24Hour
+              themeVariant={isDark ? 'dark' : 'light'}
+              onChange={(event, time) => {
+                setShowTimePicker(Platform.OS === 'ios');
+                if (time) {
+                  // Preserve date when changing time
+                  const merged = new Date(selectedDate);
+                  merged.setHours(time.getHours(), time.getMinutes());
+                  setSelectedDate(merged);
+                }
               }}
             />
           )}

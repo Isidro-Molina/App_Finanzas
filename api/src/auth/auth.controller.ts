@@ -11,6 +11,7 @@ import {
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { GoogleAuthDto } from './dto/google-auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Controller('auth')
@@ -37,6 +38,18 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  /**
+   * POST /api/v1/auth/google
+   * Autentica con Google OAuth. Recibe el idToken del cliente,
+   * lo verifica con Google, y devuelve un JWT de la app.
+   * Body: { idToken: string }
+   */
+  @Post('google')
+  @HttpCode(HttpStatus.OK)
+  googleAuth(@Body() dto: GoogleAuthDto) {
+    return this.authService.googleAuth(dto);
   }
 
   /**

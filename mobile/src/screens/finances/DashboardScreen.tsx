@@ -14,7 +14,7 @@ import apiClient from '../../api/client';
 import { SpendingChart } from '../../components/SpendingChart';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
-import { Info, X, User, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { Info, X, ChevronLeft, ChevronRight } from 'lucide-react-native';
 
 interface SummaryData {
   month: number;
@@ -57,9 +57,25 @@ function getCategoryColor(icon: string | null, index: number): string {
   return palette[index % palette.length];
 }
 
+const Skeleton = ({ width, height, borderRadius, marginBottom = 0, style = {} }: any) => {
+  const { colors, isDark } = useTheme();
+  return (
+    <View
+      style={{
+        width,
+        height,
+        borderRadius,
+        marginBottom,
+        backgroundColor: isDark ? '#334155' : '#E2E8F0',
+        ...style
+      }}
+    />
+  );
+};
+
 export const DashboardScreen = () => {
   const navigation = useNavigation<any>();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -74,12 +90,14 @@ export const DashboardScreen = () => {
   const [currentYear, setCurrentYear] = useState(now.getFullYear());
 
   const goToPrevMonth = () => {
+    setLoading(true);
     if (currentMonth === 1) { setCurrentMonth(12); setCurrentYear((y) => y - 1); }
     else setCurrentMonth((m) => m - 1);
   };
   const goToNextMonth = () => {
     const isCurrentMonth = currentMonth === now.getMonth() + 1 && currentYear === now.getFullYear();
     if (isCurrentMonth) return; // can't go forward beyond today
+    setLoading(true);
     if (currentMonth === 12) { setCurrentMonth(1); setCurrentYear((y) => y + 1); }
     else setCurrentMonth((m) => m + 1);
   };
@@ -114,19 +132,72 @@ export const DashboardScreen = () => {
     fetchData();
   };
 
-  const totalBudget = budgets.reduce((acc, b) => acc + Number(b.amount), 0);
+  const totalIncome = summary?.totalIncome ?? 0;
   const totalSpent = summary?.totalExpense ?? 0;
-  const remainingBudget = totalBudget > 0 ? totalBudget - totalSpent : summary?.balance ?? 0;
-  let pct = totalBudget > 0 ? Math.round((remainingBudget / totalBudget) * 100) : 0;
-  if (pct < 0) pct = 0;
+  // Bar: spending ratio vs income (only meaningful if income > 0)
+  const hasIncome = totalIncome > 0;
+  const spentPct = hasIncome ? Math.min(100, Math.round((totalSpent / totalIncome) * 100)) : 0;
+  const balance = totalIncome - totalSpent;
 
   if (loading && !refreshing) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={colors.brand} />
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: colors.textMuted, marginTop: 12 }}>
-          Cargando tus finanzas...
-        </Text>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        {/* Top bar */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 }}>
+          <Skeleton width={150} height={28} borderRadius={8} marginBottom={8} />
+          <Skeleton width={100} height={18} borderRadius={6} />
+        </View>
+
+        {/* Card */}
+        <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
+          <Skeleton width="100%" height={140} borderRadius={20} />
+        </View>
+
+        {/* Donut chart */}
+        <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
+          <View style={{ backgroundColor: colors.bgCard, borderRadius: 20, paddingVertical: 20, paddingHorizontal: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 }}>
+            <Skeleton width={130} height={18} borderRadius={6} marginBottom={4} />
+            <Skeleton width={60} height={12} borderRadius={4} marginBottom={16} />
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+              {/* Donut ring */}
+              <View style={{ width: 140, height: 140, borderRadius: 70, borderWidth: 22, borderColor: isDark ? '#334155' : '#E2E8F0', backgroundColor: 'transparent' }} />
+              
+              {/* Legend lines */}
+              <View style={{ flex: 1, gap: 12 }}>
+                {[1, 2, 3, 4].map((i) => (
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                      <Skeleton width={8} height={8} borderRadius={4} />
+                      <Skeleton width={80} height={12} borderRadius={4} />
+                    </View>
+                    <Skeleton width={24} height={12} borderRadius={4} />
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Header txs */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 }}>
+          <Skeleton width={120} height={20} borderRadius={6} />
+        </View>
+
+        {/* Txs list */}
+        <View style={{ paddingHorizontal: 20, gap: 8 }}>
+          {[1, 2, 3, 4].map((i) => (
+            <View key={i} style={{ backgroundColor: colors.bgCard, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Skeleton width={42} height={42} borderRadius={12} />
+              <View style={{ flex: 1 }}>
+                <Skeleton width={60} height={14} borderRadius={4} marginBottom={8} />
+                <Skeleton width={120} height={16} borderRadius={4} marginBottom={4} />
+                <Skeleton width={80} height={12} borderRadius={4} />
+              </View>
+              <Skeleton width={60} height={20} borderRadius={6} />
+            </View>
+          ))}
+        </View>
       </View>
     );
   }
@@ -143,36 +214,26 @@ export const DashboardScreen = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />
         }
       >
-        {/* Top bar with month navigation */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View>
-            {/* Month navigator */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-              <TouchableOpacity onPress={goToPrevMonth} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <ChevronLeft size={16} color={colors.textMuted} />
-              </TouchableOpacity>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.brand }}>
-                {monthName.charAt(0).toUpperCase() + monthName.slice(1)} {yearStr}
-              </Text>
-              <TouchableOpacity onPress={goToNextMonth} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <ChevronRight size={16} color={isCurrentMonth ? colors.borderSubtle : colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 22, color: colors.textPrimary }}>
-              Mis Finanzas
+        {/* Top bar — month navigation only, no avatar */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 }}>
+          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 22, color: colors.textPrimary, marginBottom: 8 }}>
+            Mis Finanzas
+          </Text>
+          {/* Month navigator */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <TouchableOpacity onPress={goToPrevMonth} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <ChevronLeft size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.brand }}>
+              {monthName.charAt(0).toUpperCase() + monthName.slice(1)} {yearStr}
             </Text>
+            <TouchableOpacity onPress={goToNextMonth} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <ChevronRight size={16} color={isCurrentMonth ? colors.borderSubtle : colors.textMuted} />
+            </TouchableOpacity>
           </View>
-          <LinearGradient
-            colors={['#2563EB', '#7C3AED']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <User size={18} color="#fff" />
-          </LinearGradient>
         </View>
 
-        {/* Budget card */}
+        {/* Spending card — always shows total spent, bar only if income exists */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
           <LinearGradient
             colors={['#1D4ED8', '#2563EB', '#3B82F6']}
@@ -190,22 +251,28 @@ export const DashboardScreen = () => {
             }}
           >
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.7)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Presupuesto Restante
+              Gastos del Mes
             </Text>
-            <Text style={{ fontFamily: 'Outfit_800ExtraBold', fontSize: 42, color: '#fff', marginBottom: 16, letterSpacing: -0.5 }}>
-              ${remainingBudget.toLocaleString('es-AR')}
+            <Text style={{ fontFamily: 'Outfit_800ExtraBold', fontSize: 42, color: '#fff', marginBottom: hasIncome ? 16 : 0, letterSpacing: -0.5 }}>
+              ${totalSpent.toLocaleString('es-AR')}
             </Text>
-            <View style={{ height: 6, borderRadius: 99, backgroundColor: 'rgba(255,255,255,0.2)', overflow: 'hidden' }}>
-              <View style={{ height: '100%', width: `${pct}%`, borderRadius: 99, backgroundColor: '#fff' }} />
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
-              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.65)' }}>
-                Gastado: ${totalSpent.toLocaleString('es-AR')}
-              </Text>
-              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.65)' }}>
-                Total: ${totalBudget.toLocaleString('es-AR')}
-              </Text>
-            </View>
+
+            {hasIncome && (
+              <>
+                {/* Progress bar: spent vs income */}
+                <View style={{ height: 6, borderRadius: 99, backgroundColor: 'rgba(255,255,255,0.2)', overflow: 'hidden', marginBottom: 8 }}>
+                  <View style={{ height: '100%', width: `${spentPct}%`, borderRadius: 99, backgroundColor: spentPct >= 90 ? '#FCA5A5' : '#fff' }} />
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.65)' }}>
+                    {spentPct}% de tus ingresos
+                  </Text>
+                  <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: balance >= 0 ? 'rgba(255,255,255,0.85)' : '#FCA5A5' }}>
+                    {balance >= 0 ? `Disponible: $${balance.toLocaleString('es-AR')}` : `Excedido: $${Math.abs(balance).toLocaleString('es-AR')}`}
+                  </Text>
+                </View>
+              </>
+            )}
           </LinearGradient>
         </View>
 

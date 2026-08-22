@@ -1,5 +1,5 @@
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 // En emulador Android '10.0.2.2', en iOS simulator 'localhost'.
@@ -23,12 +23,12 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   async (config) => {
     try {
-      const token = await AsyncStorage.getItem('@app_finanzas_token');
+      const token = await SecureStore.getItemAsync('app_finanzas_token');
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (e) {
-      console.error('Error al leer token de AsyncStorage', e);
+      console.error('Error al leer token de SecureStore', e);
     }
     return config;
   },
