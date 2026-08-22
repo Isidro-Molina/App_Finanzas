@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UsersService } from 'src/users/users.service';
-import { MailService } from 'src/mail/mail.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { AddExpenseDto } from './dto/add-expense.dto';
@@ -29,7 +28,6 @@ export class GroupsService {
   constructor(
     private prisma: PrismaService,
     private usersService: UsersService,
-    private mailService: MailService,
   ) {}
 
   // ── CRUD de grupos ──────────────────────────────────────────────────────────
@@ -92,47 +90,22 @@ export class GroupsService {
 
   // ── Miembros ────────────────────────────────────────────────────────────────
 
-  /** Agrega un miembro por email e invita por email si no tiene cuenta */
+  /** Agrega un miembro por email (solo miembros existentes pueden invitar) */
   async addMember(userId: string, groupId: string, dto: AddMemberDto) {
-    // 1. Verificar que el invitador sea miembro del grupo y obtener datos del grupo
-    const group = await this.findOne(userId, groupId);
-    const inviter = await this.usersService.findById(userId);
+    await this.findOne(userId, groupId); // Verifica que el invitador sea miembro
 
-    // 2. Buscar si el usuario invitado ya tiene cuenta en la app
     const newUser = await this.usersService.findByEmail(dto.email);
+    if (!newUser) throw new NotFoundException('No existe un usuario con ese email');
 
-    if (!newUser) {
-      // Usuario sin cuenta: enviar email de invitación para que se registre
-      void this.mailService.sendGroupInvitation({
-        toEmail: dto.email,
-        inviterName: inviter?.name ?? 'Un usuario',
-        groupName: group.name,
-        userExists: false,
-      });
-      return { message: `Se envió un email de invitación a ${dto.email}. Cuando se registre, podrás agregarlo al grupo.` };
-    }
-
-    // 3. Verificar que no sea ya miembro
     const alreadyMember = await this.prisma.groupMember.findUnique({
       where: { userId_groupId: { userId: newUser.id, groupId } },
     });
     if (alreadyMember) throw new BadRequestException('El usuario ya es miembro del grupo');
 
-    // 4. Agregar al grupo
-    const member = await this.prisma.groupMember.create({
+    return this.prisma.groupMember.create({
       data: { userId: newUser.id, groupId, role: 'MEMBER' },
       include: MEMBER_INCLUDE,
     });
-
-    // 5. Notificar al usuario que fue agregado (sin bloquear la respuesta)
-    void this.mailService.sendGroupInvitation({
-      toEmail: dto.email,
-      inviterName: inviter?.name ?? 'Un usuario',
-      groupName: group.name,
-      userExists: true,
-    });
-
-    return member;
   }
 
   /** Elimina un miembro (solo ADMIN puede hacerlo, o el propio usuario saliendo) */

@@ -39,8 +39,6 @@ export const LoginScreen = () => {
     redirectUri,
   });
 
-  console.log('redirectUri:', redirectUri);
-
   useEffect(() => {
     checkBioAvailability();
   }, [biometricEnabled]);
