@@ -96,7 +96,7 @@ export const GroupDetailScreen = () => {
     setInviting(true);
     try {
       await apiClient.post(`/groups/${groupId}/members`, { email: memberEmail.trim() });
-      Alert.alert('¡Éxito!', 'Miembro agregado al grupo');
+      Alert.alert('Invitación enviada', 'Será parte del grupo cuando acepte la invitación.');
       setMemberEmail('');
       setIsAddMemberOpen(false);
       fetchData();

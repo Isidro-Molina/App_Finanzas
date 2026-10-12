@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,12 @@ import apiClient from '../../api/client';
 import { SpendingChart } from '../../components/SpendingChart';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
-import { Info, X, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { Info, X, ChevronLeft, ChevronRight, ChevronDown, AlertCircle, RefreshCw } from 'lucide-react-native';
+
+const MONTH_NAMES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+];
 
 interface SummaryData {
   month: number;
@@ -83,11 +88,15 @@ export const DashboardScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [tooltipTx, setTooltipTx] = useState<Transaction | null>(null);
+  const [hasError, setHasError] = useState(false);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   // Month navigation
   const now = new Date();
   const [currentMonth, setCurrentMonth] = useState(now.getMonth() + 1);
   const [currentYear, setCurrentYear] = useState(now.getFullYear());
+  const [pickerYear, setPickerYear] = useState(now.getFullYear());
+  const activeFetchIdRef = useRef(0);
 
   const goToPrevMonth = () => {
     setLoading(true);
@@ -104,20 +113,27 @@ export const DashboardScreen = () => {
   const isCurrentMonth = currentMonth === now.getMonth() + 1 && currentYear === now.getFullYear();
 
   const fetchData = async () => {
+    const fetchId = ++activeFetchIdRef.current;
+    setHasError(false);
     try {
       const [summaryRes, txRes, budgetRes] = await Promise.all([
         apiClient.get(`/transactions/summary?month=${currentMonth}&year=${currentYear}`),
         apiClient.get(`/transactions?month=${currentMonth}&year=${currentYear}`),
         apiClient.get(`/budgets?month=${currentMonth}&year=${currentYear}`),
       ]);
+      if (fetchId !== activeFetchIdRef.current) return;
       setSummary(summaryRes.data);
       setTransactions(txRes.data);
       setBudgets(budgetRes.data);
     } catch (e) {
+      if (fetchId !== activeFetchIdRef.current) return;
       console.error('Error cargando dashboard:', e);
+      setHasError(true);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (fetchId === activeFetchIdRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
@@ -224,14 +240,92 @@ export const DashboardScreen = () => {
             <TouchableOpacity onPress={goToPrevMonth} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <ChevronLeft size={16} color={colors.textMuted} />
             </TouchableOpacity>
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.brand }}>
-              {monthName.charAt(0).toUpperCase() + monthName.slice(1)} {yearStr}
-            </Text>
-            <TouchableOpacity onPress={goToNextMonth} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <TouchableOpacity
+              onPress={() => {
+                setPickerYear(currentYear);
+                setIsDatePickerOpen(true);
+              }}
+              activeOpacity={0.7}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 8,
+                backgroundColor: colors.brandLight,
+              }}
+            >
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.brand }}>
+                {monthName.charAt(0).toUpperCase() + monthName.slice(1)} {yearStr}
+              </Text>
+              <ChevronDown size={14} color={colors.brand} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={goToNextMonth} disabled={isCurrentMonth} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <ChevronRight size={16} color={isCurrentMonth ? colors.borderSubtle : colors.textMuted} />
             </TouchableOpacity>
           </View>
         </View>
+
+        {hasError && (
+          <View
+            style={{
+              marginHorizontal: 20,
+              marginBottom: 16,
+              backgroundColor: colors.bgCard,
+              borderRadius: 16,
+              padding: 20,
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <AlertCircle size={32} color="#EF4444" style={{ marginBottom: 8 }} />
+            <Text
+              style={{
+                fontFamily: 'Inter_600SemiBold',
+                fontSize: 15,
+                color: colors.textPrimary,
+                textAlign: 'center',
+                marginBottom: 4,
+              }}
+            >
+              No pudimos cargar los datos
+            </Text>
+            <Text
+              style={{
+                fontFamily: 'Inter_400Regular',
+                fontSize: 13,
+                color: colors.textMuted,
+                textAlign: 'center',
+                marginBottom: 14,
+              }}
+            >
+              Revisá tu conexión con el servidor o intentá nuevamente.
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                setLoading(true);
+                fetchData();
+              }}
+              activeOpacity={0.8}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                backgroundColor: colors.brand,
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+                borderRadius: 10,
+              }}
+            >
+              <RefreshCw size={14} color="#fff" />
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#fff' }}>
+                Reintentar
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Spending card — always shows total spent, bar only if income exists */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
@@ -424,6 +518,140 @@ export const DashboardScreen = () => {
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted, marginTop: 12 }}>
               {tooltipTx ? new Date(tooltipTx.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' }) : ''}
             </Text>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Modal selector de mes y año */}
+      <Modal
+        visible={isDatePickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsDatePickerOpen(false)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 24,
+          }}
+          onPress={() => setIsDatePickerOpen(false)}
+        >
+          <Pressable
+            style={{
+              backgroundColor: colors.bgCard,
+              borderRadius: 24,
+              padding: 24,
+              width: '100%',
+              maxWidth: 360,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.15,
+              shadowRadius: 24,
+              elevation: 10,
+            }}
+            onPress={() => {}}
+          >
+            {/* Header del modal */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: colors.textPrimary }}>
+                Seleccionar Período
+              </Text>
+              <TouchableOpacity onPress={() => setIsDatePickerOpen(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <X size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Selector de año */}
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                backgroundColor: colors.bgInput,
+                borderRadius: 14,
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                marginBottom: 18,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              <TouchableOpacity
+                onPress={() => setPickerYear((y) => y - 1)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <ChevronLeft size={20} color={colors.textPrimary} />
+              </TouchableOpacity>
+              <Text style={{ fontFamily: 'Outfit_800ExtraBold', fontSize: 18, color: colors.brand }}>
+                {pickerYear}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  if (pickerYear < now.getFullYear()) setPickerYear((y) => y + 1);
+                }}
+                disabled={pickerYear >= now.getFullYear()}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <ChevronRight
+                  size={20}
+                  color={pickerYear >= now.getFullYear() ? colors.borderSubtle : colors.textPrimary}
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Grilla de 12 meses */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between' }}>
+              {MONTH_NAMES.map((name, index) => {
+                const monthNum = index + 1;
+                const isFuture = pickerYear === now.getFullYear() && index > now.getMonth();
+                const isSelected = pickerYear === currentYear && monthNum === currentMonth;
+
+                return (
+                  <TouchableOpacity
+                    key={name}
+                    disabled={isFuture}
+                    onPress={() => {
+                      setIsDatePickerOpen(false);
+                      setLoading(true);
+                      setCurrentMonth(monthNum);
+                      setCurrentYear(pickerYear);
+                    }}
+                    style={{
+                      width: '31%',
+                      paddingVertical: 12,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: isSelected
+                        ? colors.brand
+                        : isFuture
+                        ? 'transparent'
+                        : colors.bgInput,
+                      borderWidth: 1,
+                      borderColor: isSelected
+                        ? colors.brand
+                        : isFuture
+                        ? 'transparent'
+                        : colors.border,
+                      opacity: isFuture ? 0.3 : 1,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: isSelected ? 'Inter_700Bold' : 'Inter_500Medium',
+                        fontSize: 13,
+                        color: isSelected ? '#fff' : colors.textPrimary,
+                      }}
+                    >
+                      {name.slice(0, 3)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </Pressable>
         </Pressable>
       </Modal>

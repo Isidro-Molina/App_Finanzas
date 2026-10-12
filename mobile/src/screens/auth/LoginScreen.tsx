@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,6 +21,7 @@ const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
 export const LoginScreen = () => {
   const { login, register, loginWithToken, biometricEnabled, loginWithBiometric, isBiometricAvailable } = useAuth();
   const { colors } = useTheme();
+  const navigation = useNavigation<any>();
 
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [name, setName] = useState('');
@@ -192,6 +194,12 @@ export const LoginScreen = () => {
             <Text style={labelStyle}>Contraseña</Text>
             <TextInput value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={colors.textMuted} style={inputStyle} secureTextEntry />
           </View>
+
+          {!isRegisterMode && (
+            <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={{ alignSelf: 'flex-end', marginTop: -4 }}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.brand }}>¿Olvidaste tu contraseña?</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Submit */}
           <TouchableOpacity onPress={handleSubmit} disabled={loading} activeOpacity={0.8} style={{ marginTop: 8, backgroundColor: colors.brand, borderRadius: 14, paddingVertical: 17, alignItems: 'center', justifyContent: 'center', shadowColor: colors.brand, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 4 }}>
