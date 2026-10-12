@@ -7,6 +7,7 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UsersService } from 'src/users/users.service';
 import { MailService } from 'src/mail/mail.service';
+import { NotificationsService } from 'src/notifications/notifications.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { AddExpenseDto } from './dto/add-expense.dto';
@@ -17,8 +18,9 @@ const MEMBER_INCLUDE = {
   user: { select: { id: true, name: true, email: true } },
 } as const;
 
+// Solo miembros ACTIVOS cuentan como parte del grupo (los PENDING aún no aceptaron)
 const GROUP_INCLUDE = {
-  members:  { include: MEMBER_INCLUDE },
+  members:  { where: { status: 'ACTIVE' as const }, include: MEMBER_INCLUDE },
   createdBy: { select: { id: true, name: true, email: true } },
 } as const;
 
@@ -30,6 +32,7 @@ export class GroupsService {
     private prisma: PrismaService,
     private usersService: UsersService,
     private mailService: MailService,
+    private notificationsService: NotificationsService,
   ) {}
 
   // ── CRUD de grupos ──────────────────────────────────────────────────────────
@@ -37,7 +40,7 @@ export class GroupsService {
   /** Lista todos los grupos en los que participa el usuario */
   findAll(userId: string) {
     return this.prisma.group.findMany({
-      where: { members: { some: { userId } } },
+      where: { members: { some: { userId, status: 'ACTIVE' } } },
       include: GROUP_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
@@ -92,7 +95,11 @@ export class GroupsService {
 
   // ── Miembros ────────────────────────────────────────────────────────────────
 
-  /** Agrega un miembro por email e invita por email si no tiene cuenta */
+  /**
+   * Invita a un usuario al grupo por email.
+   * Si tiene cuenta queda como PENDING hasta que acepte (no es parte del grupo todavía).
+   * Si no tiene cuenta se le envía un email para que se registre.
+   */
   async addMember(userId: string, groupId: string, dto: AddMemberDto) {
     // 1. Verificar que el invitador sea miembro del grupo y obtener datos del grupo
     const group = await this.findOne(userId, groupId);
@@ -109,22 +116,33 @@ export class GroupsService {
         groupName: group.name,
         userExists: false,
       });
-      return { message: `Se envió un email de invitación a ${dto.email}. Cuando se registre, podrás agregarlo al grupo.` };
+      return { message: `Se envió un email de invitación a ${dto.email}. Cuando se registre, podrás invitarlo al grupo.` };
     }
 
-    // 3. Verificar que no sea ya miembro
-    const alreadyMember = await this.prisma.groupMember.findUnique({
+    // 3. Verificar que no sea ya miembro ni tenga una invitación pendiente
+    const existing = await this.prisma.groupMember.findUnique({
       where: { userId_groupId: { userId: newUser.id, groupId } },
     });
-    if (alreadyMember) throw new BadRequestException('El usuario ya es miembro del grupo');
+    if (existing?.status === 'ACTIVE') {
+      throw new BadRequestException('El usuario ya es miembro del grupo');
+    }
+    if (existing?.status === 'PENDING') {
+      throw new BadRequestException('El usuario ya tiene una invitación pendiente');
+    }
 
-    // 4. Agregar al grupo
+    // 4. Crear la invitación (PENDING)
     const member = await this.prisma.groupMember.create({
-      data: { userId: newUser.id, groupId, role: 'MEMBER' },
+      data: {
+        userId: newUser.id,
+        groupId,
+        role: 'MEMBER',
+        status: 'PENDING',
+        invitedById: userId,
+      },
       include: MEMBER_INCLUDE,
     });
 
-    // 5. Notificar al usuario que fue agregado (sin bloquear la respuesta)
+    // 5. Avisar al invitado por email (sin bloquear la respuesta)
     void this.mailService.sendGroupInvitation({
       toEmail: dto.email,
       inviterName: inviter?.name ?? 'Un usuario',
@@ -132,7 +150,44 @@ export class GroupsService {
       userExists: true,
     });
 
+    // Notificación in-app: si falla no debe romper la acción principal
+    try {
+      await this.notificationsService.create({
+        userId: newUser.id,
+        title: 'Te invitaron a un grupo',
+        message: `${inviter?.name ?? 'Un usuario'} te invitó al grupo "${group.name}".`,
+        type: 'GROUP_INVITE',
+        relatedId: groupId,
+      });
+    } catch (error) {
+      console.error('Error creando notificación de invitación:', error);
+    }
+
     return member;
+  }
+
+  /** El invitado acepta la invitación: pasa a ser miembro ACTIVO */
+  async acceptInvitation(userId: string, groupId: string) {
+    const invite = await this.findPendingInvite(userId, groupId);
+
+    const member = await this.prisma.groupMember.update({
+      where: { userId_groupId: { userId: invite.userId, groupId } },
+      data: { status: 'ACTIVE', joinedAt: new Date() },
+      include: MEMBER_INCLUDE,
+    });
+    await this.notificationsService.markInviteRead(userId, groupId);
+    return member;
+  }
+
+  /** El invitado rechaza la invitación: se elimina la fila pendiente */
+  async rejectInvitation(userId: string, groupId: string) {
+    await this.findPendingInvite(userId, groupId);
+
+    await this.prisma.groupMember.delete({
+      where: { userId_groupId: { userId, groupId } },
+    });
+    await this.notificationsService.markInviteRead(userId, groupId);
+    return { message: 'Invitación rechazada' };
   }
 
   /** Elimina un miembro (solo ADMIN puede hacerlo, o el propio usuario saliendo) */
@@ -172,11 +227,21 @@ export class GroupsService {
     if (!isAdmin) throw new ForbiddenException('Solo el ADMIN puede realizar esta acción');
   }
 
+  private async findPendingInvite(userId: string, groupId: string) {
+    const invite = await this.prisma.groupMember.findUnique({
+      where: { userId_groupId: { userId, groupId } },
+    });
+    if (!invite || invite.status !== 'PENDING') {
+      throw new NotFoundException('No tenés una invitación pendiente para este grupo');
+    }
+    return invite;
+  }
+
   private async isMemberWithRole(userId: string, groupId: string, role: 'ADMIN' | 'MEMBER') {
     const member = await this.prisma.groupMember.findUnique({
       where: { userId_groupId: { userId, groupId } },
     });
-    return member?.role === role;
+    return member?.status === 'ACTIVE' && member.role === role;
   }
 }
 

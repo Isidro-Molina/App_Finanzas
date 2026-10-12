@@ -5,11 +5,17 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { NotificationsService } from 'src/notifications/notifications.service';
 import { AddExpenseDto } from './dto/add-expense.dto';
 
 @Injectable()
 export class ExpensesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
+
+
 
   // ── Listar gastos del grupo ─────────────────────────────────────────────────
 
@@ -41,10 +47,18 @@ export class ExpensesService {
       throw new BadRequestException('El monto debe ser un número positivo');
     }
 
-    // Obtener todos los miembros del grupo para calcular splits
-    const members = await this.prisma.groupMember.findMany({
-      where: { groupId },
+    // Obtener información del grupo y del usuario que paga
+    const group = await this.prisma.group.findUnique({
+      where: { id: groupId },
+      include: { members: { where: { status: 'ACTIVE' } } }, // pendientes no cuentan para la división
     });
+    if (!group) throw new NotFoundException('Grupo no encontrado');
+    if (!group.members.some((m) => m.userId === userId)) {
+      throw new ForbiddenException('No sos miembro de este grupo');
+    }
+
+    const payer = await this.prisma.user.findUnique({ where: { id: userId } });
+    const members = group.members;
 
     let splitsData: Array<{ userId: string; amountOwed: string }>;
 
@@ -108,6 +122,24 @@ export class ExpensesService {
           splits: { include: { user: { select: { id: true, name: true } } } },
         },
       });
+
+      // Crear notificaciones para el resto del grupo (dentro de la misma transacción)
+      const formattedAmount = totalAmount.toLocaleString('es-AR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+      const notifications = members
+        .filter((m) => m.userId !== userId)
+        .map((m) => ({
+          userId: m.userId,
+          title: 'Nuevo gasto grupal',
+          message: `${payer?.name ?? 'Alguien'} cargó un gasto de $${formattedAmount} en "${group.name}".`,
+          type: 'GROUP_EXPENSE' as const,
+          relatedId: groupId,
+        }));
+
+      await this.notificationsService.createMany(notifications, tx);
+
       return expense;
     });
   }
@@ -139,6 +171,8 @@ export class ExpensesService {
     const member = await this.prisma.groupMember.findUnique({
       where: { userId_groupId: { userId, groupId } },
     });
-    if (!member) throw new ForbiddenException('No sos miembro de este grupo');
+    if (!member || member.status !== 'ACTIVE') {
+      throw new ForbiddenException('No sos miembro de este grupo');
+    }
   }
 }

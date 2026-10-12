@@ -22,6 +22,12 @@ enum GroupMemberRole {
   MEMBER
 }
 
+// PENDING = invitado que todavía no aceptó (NO es parte del grupo)
+enum GroupMemberStatus {
+  PENDING
+  ACTIVE
+}
+
 // ==========================================
 // USUARIOS
 // ==========================================
@@ -41,6 +47,8 @@ model User {
   groupsCreated        Group[]         @relation("GroupCreator") // Grupos que fundó
   expensesPaid         GroupExpense[]  @relation("PaidBy")
   splitsOwed           ExpenseSplit[]
+  notifications        Notification[]
+  passwordResetTokens  PasswordResetToken[]
 }
 
 // ==========================================
@@ -115,8 +123,10 @@ model Group {
 model GroupMember {
   userId   String
   groupId  String
-  role     GroupMemberRole @default(MEMBER) // ← ADMIN puede cerrar el grupo, borrar gastos
-  joinedAt DateTime        @default(now())  // ← Para saber cuándo se unió
+  role     GroupMemberRole   @default(MEMBER) // ← ADMIN puede cerrar el grupo, borrar gastos
+  status   GroupMemberStatus @default(ACTIVE) // ← PENDING hasta que el invitado acepte
+  invitedById String?                         // ← Quién lo invitó
+  joinedAt DateTime          @default(now())  // ← Para saber cuándo se unió
 
   user  User  @relation(fields: [userId], references: [id])
   group Group @relation(fields: [groupId], references: [id])
@@ -151,4 +161,41 @@ model ExpenseSplit {
 
   userId String
   user   User   @relation(fields: [userId], references: [id])
+}
+// ==========================================
+// NOTIFICACIONES
+// ==========================================
+enum NotificationType {
+  GROUP_INVITE
+  GROUP_EXPENSE
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  type      NotificationType
+  relatedId String?          // ID del grupo o gasto
+  createdAt DateTime         @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// RECUPERACIÓN DE CONTRASEÑA
+// ==========================================
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  codeHash  String    // Hash bcrypt del código de 6 dígitos (nunca el código en claro)
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

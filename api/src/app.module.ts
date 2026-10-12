@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { FinancesModule } from './finances/finances.module';
 import { SplitModule } from './split/split.module';
 import { MailModule } from './mail/mail.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { MailModule } from './mail/mail.module';
     FinancesModule,
     SplitModule,
     MailModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -4,10 +4,12 @@ import { ExpensesService } from './expenses.service';
 import { BalanceService } from './balance.service';
 import { GroupsController } from './controllers/groups.controller';
 import { UsersModule } from 'src/users/users.module';
+import { NotificationsModule } from 'src/notifications/notifications.module';
 
 @Module({
   imports: [
     UsersModule, // Para buscar usuarios por email al agregar miembros
+    NotificationsModule, // Notificaciones in-app
   ],
   controllers: [GroupsController],
   providers: [GroupsService, ExpensesService, BalanceService],
