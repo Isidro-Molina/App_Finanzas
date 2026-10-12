@@ -37,3 +37,6 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# ─── Planes de implementación ───────────────
+plans/

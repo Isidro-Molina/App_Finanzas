@@ -34,7 +34,9 @@ export class BalanceService {
     const member = await this.prisma.groupMember.findUnique({
       where: { userId_groupId: { userId, groupId } },
     });
-    if (!member) throw new ForbiddenException('No sos miembro de este grupo');
+    if (!member || member.status !== 'ACTIVE') {
+      throw new ForbiddenException('No sos miembro de este grupo');
+    }
 
     // Traer todos los gastos con sus splits y la info de los usuarios
     const expenses = await this.prisma.groupExpense.findMany({

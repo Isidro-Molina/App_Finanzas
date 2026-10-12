@@ -8,6 +8,8 @@ import {
   UseGuards,
   Request,
   Patch,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { GroupsService } from '../groups.service';
@@ -70,6 +72,20 @@ export class GroupsController {
     @Body() dto: AddMemberDto,
   ) {
     return this.groupsService.addMember(req.user.userId, id, dto);
+  }
+
+  /** POST /api/v1/groups/:id/invitations/accept — El invitado acepta */
+  @Post(':id/invitations/accept')
+  @HttpCode(HttpStatus.OK)
+  acceptInvitation(@Request() req: AuthReq, @Param('id') id: string) {
+    return this.groupsService.acceptInvitation(req.user.userId, id);
+  }
+
+  /** POST /api/v1/groups/:id/invitations/reject — El invitado rechaza */
+  @Post(':id/invitations/reject')
+  @HttpCode(HttpStatus.OK)
+  rejectInvitation(@Request() req: AuthReq, @Param('id') id: string) {
+    return this.groupsService.rejectInvitation(req.user.userId, id);
   }
 
   /** DELETE /api/v1/groups/:id/members/:userId — Salir o expulsar miembro */
