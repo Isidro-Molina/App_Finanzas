@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
+import apiClient from '../api/client';
 import { useTheme } from '../context/ThemeContext';
 
 import { LoginScreen } from '../screens/auth/LoginScreen';
+import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
+import { ResetPasswordScreen } from '../screens/auth/ResetPasswordScreen';
 import { DashboardScreen } from '../screens/finances/DashboardScreen';
 import { AddTransactionScreen } from '../screens/finances/AddTransactionScreen';
 import { GroupsScreen } from '../screens/split/GroupsScreen';
@@ -13,12 +16,13 @@ import { GroupDetailScreen } from '../screens/split/GroupDetailScreen';
 import { AddGroupExpenseScreen } from '../screens/split/AddGroupExpenseScreen';
 import { SettingsScreen } from '../screens/settings/SettingsScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
+import { NotificationsScreen } from '../screens/notifications/NotificationsScreen';
 import { AddCategoryScreen } from '../screens/finances/AddCategoryScreen';
 import { ManageCategoriesScreen } from '../screens/finances/ManageCategoriesScreen';
 import { EditProfileScreen } from '../screens/settings/EditProfileScreen';
 import { ChangePasswordScreen } from '../screens/settings/ChangePasswordScreen';
 
-import { Wallet, Users, Settings, User } from 'lucide-react-native';
+import { Wallet, Users, Settings, User, Bell } from 'lucide-react-native';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -35,6 +39,23 @@ const GroupStack = () => {
 
 const MainTabs = () => {
   const { colors } = useTheme();
+  const [unread, setUnread] = useState(0);
+
+  const refreshUnread = useCallback(async () => {
+    try {
+      const res = await apiClient.get<Array<{ isRead: boolean }>>('/notifications');
+      setUnread(res.data.filter((n) => !n.isRead).length);
+    } catch {
+      // Silencioso: el badge es opcional
+    }
+  }, []);
+
+  // Refresca el badge al abrir la app y cada 30s
+  useEffect(() => {
+    refreshUnread();
+    const id = setInterval(refreshUnread, 30000);
+    return () => clearInterval(id);
+  }, [refreshUnread]);
 
   return (
     <Tab.Navigator
@@ -72,6 +93,15 @@ const MainTabs = () => {
           tabBarIcon: ({ color, size }) => <Users size={size} color={color} />,
         }}
       />
+      <Tab.Screen
+        name="Notificaciones"
+        options={{
+          tabBarIcon: ({ color, size }) => <Bell size={size} color={color} />,
+          tabBarBadge: unread > 0 ? unread : undefined,
+        }}
+      >
+        {() => <NotificationsScreen onUnreadChange={setUnread} />}
+      </Tab.Screen>
       <Tab.Screen
         name="Ajustes"
         component={SettingsScreen}
@@ -139,7 +169,11 @@ export const RootNavigator = () => {
           />
         </>
       ) : (
-        <RootStack.Screen name="Login" component={LoginScreen} />
+        <>
+          <RootStack.Screen name="Login" component={LoginScreen} />
+          <RootStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+          <RootStack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+        </>
       )}
     </RootStack.Navigator>
   );

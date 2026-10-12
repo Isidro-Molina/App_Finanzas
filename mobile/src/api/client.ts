@@ -14,6 +14,7 @@ export const API_URL = DEFAULT_API_URL;
 
 const apiClient = axios.create({
   baseURL: API_URL,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -33,6 +34,31 @@ apiClient.interceptors.request.use(
     return config;
   },
   (error) => Promise.reject(error),
+);
+
+// Reintento automático para requests GET que fallen por Network Error o timeout (máx 2 reintentos)
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const config = error.config as any;
+    if (!config || config.method?.toLowerCase() !== 'get') {
+      return Promise.reject(error);
+    }
+
+    config.__retryCount = config.__retryCount || 0;
+    const isNetworkOrTimeout =
+      error.code === 'ECONNABORTED' ||
+      error.message === 'Network Error' ||
+      !error.response;
+
+    if (isNetworkOrTimeout && config.__retryCount < 2) {
+      config.__retryCount += 1;
+      await new Promise((resolve) => setTimeout(resolve, 800 * config.__retryCount));
+      return apiClient(config);
+    }
+
+    return Promise.reject(error);
+  },
 );
 
 export default apiClient;
