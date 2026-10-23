@@ -2,6 +2,7 @@ import {
   Injectable,
   ForbiddenException,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateBudgetDto } from './dto/create-budget.dto';
@@ -56,7 +57,25 @@ export class BudgetsService {
   }
 
   /** Crea o actualiza un presupuesto (upsert por la constraint única) */
-  upsert(userId: string, dto: CreateBudgetDto) {
+  async upsert(userId: string, dto: CreateBudgetDto) {
+    const category = await this.prisma.category.findFirst({
+      where: {
+        id: dto.categoryId,
+        isDeleted: false,
+        OR: [{ userId: null }, { userId }],
+      },
+    });
+
+    if (!category) {
+      throw new NotFoundException('Categoría no encontrada o no disponible');
+    }
+
+    if (category.type !== 'EXPENSE') {
+      throw new BadRequestException(
+        'Los presupuestos solo pueden asignarse a categorías de tipo EXPENSE',
+      );
+    }
+
     return this.prisma.budget.upsert({
       where: {
         userId_categoryId_month_year: {

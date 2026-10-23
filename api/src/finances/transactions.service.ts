@@ -2,6 +2,7 @@ import {
   Injectable,
   ForbiddenException,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -88,7 +89,25 @@ export class TransactionsService {
 
   // ─── Crear ───────────────────────────────────────────────────────────────
 
-  create(userId: string, dto: CreateTransactionDto) {
+  async create(userId: string, dto: CreateTransactionDto) {
+    const category = await this.prisma.category.findFirst({
+      where: {
+        id: dto.categoryId,
+        isDeleted: false,
+        OR: [{ userId: null }, { userId }],
+      },
+    });
+
+    if (!category) {
+      throw new NotFoundException('Categoría no encontrada o no disponible');
+    }
+
+    if (category.type !== dto.type) {
+      throw new BadRequestException(
+        `El tipo de transacción (${dto.type}) no coincide con el tipo de la categoría (${category.type})`,
+      );
+    }
+
     return this.prisma.transaction.create({
       data: {
         userId,
@@ -107,7 +126,30 @@ export class TransactionsService {
   // ─── Actualizar ──────────────────────────────────────────────────────────
 
   async update(userId: string, id: string, dto: UpdateTransactionDto) {
-    await this.assertOwnership(userId, id);
+    const existing = await this.assertOwnership(userId, id);
+
+    if (dto.categoryId || dto.type) {
+      const categoryId = dto.categoryId ?? existing.categoryId;
+      const type = dto.type ?? existing.type;
+
+      const category = await this.prisma.category.findFirst({
+        where: {
+          id: categoryId,
+          isDeleted: false,
+          OR: [{ userId: null }, { userId }],
+        },
+      });
+
+      if (!category) {
+        throw new NotFoundException('Categoría no encontrada o no disponible');
+      }
+
+      if (category.type !== type) {
+        throw new BadRequestException(
+          `El tipo de transacción (${type}) no coincide con el tipo de la categoría (${category.type})`,
+        );
+      }
+    }
 
     return this.prisma.transaction.update({
       where: { id },
@@ -171,5 +213,6 @@ export class TransactionsService {
     if (!tx) throw new NotFoundException('Transacción no encontrada');
     if (tx.userId !== userId)
       throw new ForbiddenException('No tenés permiso sobre esta transacción');
+    return tx;
   }
 }
