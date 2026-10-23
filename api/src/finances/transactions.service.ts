@@ -140,16 +140,22 @@ export class TransactionsService {
       orderBy: { date: 'desc' },
     });
 
+    const sanitizeField = (val: string): string => {
+      if (!val) return '""';
+      let clean = val;
+      // Prevenir CSV Formula Injection (CWE-1236) anteponiendo apóstrofe
+      if (/^[=+\-@\t\r]/.test(clean)) {
+        clean = `'${clean}`;
+      }
+      return `"${clean.replace(/"/g, '""')}"`;
+    };
+
     const headers = ['Fecha', 'Tipo', 'Categoría', 'Descripción', 'Monto'];
     const rows = transactions.map((t) => {
       const dateStr = t.date.toISOString().split('T')[0];
       const typeStr = t.type === 'INCOME' ? 'Ingreso' : 'Gasto';
-      const catStr = t.category?.name
-        ? `"${t.category.name.replace(/"/g, '""')}"`
-        : 'Sin categoría';
-      const descStr = t.description
-        ? `"${t.description.replace(/"/g, '""')}"`
-        : '';
+      const catStr = sanitizeField(t.category?.name || 'Sin categoría');
+      const descStr = sanitizeField(t.description || '');
       const amountStr = Number(t.amount).toFixed(2);
       return [dateStr, typeStr, catStr, descStr, amountStr].join(',');
     });
