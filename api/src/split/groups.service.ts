@@ -318,6 +318,11 @@ export class GroupsService {
         `No podés abandonar el grupo porque tenés una deuda pendiente de $${Math.abs(userBal.net).toLocaleString('es-AR')}. Salda tu deuda primero.`,
       );
     }
+    if (userBal && userBal.net > 0.01) {
+      throw new BadRequestException(
+        `No podés abandonar el grupo porque el grupo te debe $${userBal.net.toLocaleString('es-AR')}. Debe saldarse el saldo antes de salir.`,
+      );
+    }
 
     // 2. Si es ADMIN, verificar que no quede acéfalo si hay más miembros activos
     if (member.role === 'ADMIN') {
