@@ -169,12 +169,19 @@ export class UsersService {
       // 4. Si el usuario creó grupos vacíos o es creador, reasignar creador o eliminar grupos sin miembros
       const createdGroups = await tx.group.findMany({
         where: { createdById: id },
-        include: { members: true },
+        include: {
+          members: {
+            where: {
+              userId: { not: id },
+              status: 'ACTIVE',
+            },
+          },
+        },
       });
 
       for (const group of createdGroups) {
         if (group.members.length === 0) {
-          // Si no tiene miembros, borrar gastos y el grupo
+          // Si no tiene otros miembros activos, borrar gastos, miembros pendientes y el grupo
           const expenses = await tx.groupExpense.findMany({
             where: { groupId: group.id },
           });
@@ -185,12 +192,23 @@ export class UsersService {
             });
             await tx.groupExpense.deleteMany({ where: { groupId: group.id } });
           }
+          await tx.groupMember.deleteMany({ where: { groupId: group.id } });
           await tx.group.delete({ where: { id: group.id } });
         } else {
-          // Reasignar al primer miembro activo como creador
+          // Reasignar al primer miembro activo como creador y asegurar rol ADMIN
+          const newOwnerId = group.members[0].userId;
           await tx.group.update({
             where: { id: group.id },
-            data: { createdById: group.members[0].userId },
+            data: { createdById: newOwnerId },
+          });
+          await tx.groupMember.update({
+            where: {
+              userId_groupId: {
+                userId: newOwnerId,
+                groupId: group.id,
+              },
+            },
+            data: { role: 'ADMIN' },
           });
         }
       }
