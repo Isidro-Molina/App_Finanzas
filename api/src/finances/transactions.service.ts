@@ -65,11 +65,11 @@ export class TransactionsService {
       if (tx.type === 'INCOME') totalIncome += amount;
       else totalExpense += amount;
 
-      const key = tx.categoryId;
+      const key = tx.categoryId || 'unknown';
       if (!byCategory[key]) {
         byCategory[key] = {
-          name: tx.category.name,
-          icon: tx.category.icon,
+          name: tx.category?.name ?? 'Sin categoría',
+          icon: tx.category?.icon ?? null,
           total: 0,
           type: tx.type,
         };
