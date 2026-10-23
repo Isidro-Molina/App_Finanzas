@@ -1,10 +1,4 @@
-import {
-  IsInt,
-  IsNotEmpty,
-  IsUUID,
-  Max,
-  Min,
-} from 'class-validator';
+import { IsInt, IsNotEmpty, IsUUID, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { IsPositiveDecimal } from 'src/common/validators/is-positive-decimal.decorator';
 

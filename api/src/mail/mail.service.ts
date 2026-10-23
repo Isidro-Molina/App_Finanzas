@@ -67,9 +67,10 @@ export class MailService {
         html,
       });
       this.logger.log(`Email de invitación enviado a ${toEmail}`);
-    } catch (error) {
+    } catch (error: unknown) {
       // No interrumpimos el flujo si el email falla — el usuario igual queda en el grupo
-      this.logger.error(`Error enviando email a ${toEmail}: ${error.message}`);
+      const errMsg = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Error enviando email a ${toEmail}: ${errMsg}`);
     }
   }
 
@@ -121,9 +122,10 @@ export class MailService {
         html,
       });
       this.logger.log(`Código de recuperación enviado a ${toEmail}`);
-    } catch (error) {
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
       this.logger.error(
-        `Error enviando código de recuperación a ${toEmail}: ${error.message}`,
+        `Error enviando código de recuperación a ${toEmail}: ${errMsg}`,
       );
     }
   }

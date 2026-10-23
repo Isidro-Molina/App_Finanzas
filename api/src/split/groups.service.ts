@@ -12,7 +12,6 @@ import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { SuggestMemberDto } from './dto/suggest-member.dto';
-import { AddExpenseDto } from './dto/add-expense.dto';
 import { BalanceService } from './balance.service';
 
 // ─── Helpers de inclusión Prisma ─────────────────────────────────────────────

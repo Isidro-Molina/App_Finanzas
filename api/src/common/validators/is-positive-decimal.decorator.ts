@@ -1,8 +1,4 @@
-import {
-  registerDecorator,
-  ValidationOptions,
-  ValidationArguments,
-} from 'class-validator';
+import { registerDecorator, ValidationOptions } from 'class-validator';
 
 /**
  * Validador para asegurar que un campo de monto representado como string:
@@ -23,7 +19,7 @@ export function IsPositiveDecimal(validationOptions?: ValidationOptions) {
         ...validationOptions,
       },
       validator: {
-        validate(value: any, _args: ValidationArguments) {
+        validate(value: any) {
           if (typeof value !== 'string') return false;
           if (!/^\d+(\.\d{1,2})?$/.test(value)) return false;
           const num = parseFloat(value);

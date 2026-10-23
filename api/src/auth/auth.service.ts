@@ -88,11 +88,15 @@ export class AuthService {
     }
 
     // 3. Devolver token + perfil (sin passwordHash)
-    const { passwordHash: _, ...safeUser } = user;
-
     return {
       accessToken: this.generateToken(user.id, user.email),
-      user: safeUser,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
     };
   }
 
@@ -100,7 +104,7 @@ export class AuthService {
 
   async googleAuth(dto: GoogleAuthDto) {
     // 1. Verificar el idToken con Google
-    let ticket: any;
+    let ticket;
     try {
       ticket = await this.googleClient.verifyIdToken({
         idToken: dto.idToken,
@@ -111,11 +115,12 @@ export class AuthService {
     }
 
     const payload = ticket.getPayload();
-    const { email, name, sub: googleId } = payload;
-
-    if (!email) {
+    if (!payload || !payload.email) {
       throw new UnauthorizedException('No se pudo obtener el email de Google');
     }
+
+    const email: string = payload.email;
+    const name: string = payload.name || email.split('@')[0];
 
     // 2. Buscar o crear el usuario
     let user = await this.usersService.findByEmail(email);
@@ -125,18 +130,21 @@ export class AuthService {
       user = await this.prisma.user.create({
         data: {
           email,
-          name: name || email.split('@')[0],
+          name,
           passwordHash: '', // Vacío: no puede hacer login con contraseña
         },
       });
     }
 
-    // 3. Proyección segura
-    const { passwordHash: _, ...safeUser } = user;
-
     return {
-      accessToken: this.generateToken(safeUser.id, safeUser.email),
-      user: safeUser,
+      accessToken: this.generateToken(user.id, user.email),
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
     };
   }
 
