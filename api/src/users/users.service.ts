@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -12,6 +13,52 @@ import * as bcrypt from 'bcrypt';
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
+
+  /**
+   * Busca el perfil público de un usuario.
+   * Solo permite ver perfiles propios o de usuarios con quienes se comparte un grupo activo.
+   */
+  async findPublicProfile(requesterId: string, targetId: string) {
+    if (requesterId === targetId) {
+      return this.findById(requesterId);
+    }
+
+    const sharedGroup = await this.prisma.groupMember.findFirst({
+      where: {
+        userId: requesterId,
+        status: 'ACTIVE',
+        group: {
+          members: {
+            some: {
+              userId: targetId,
+              status: 'ACTIVE',
+            },
+          },
+        },
+      },
+    });
+
+    if (!sharedGroup) {
+      throw new ForbiddenException(
+        'No tenés permiso para ver el perfil de este usuario',
+      );
+    }
+
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: targetId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    });
+
+    if (!targetUser) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    return targetUser;
+  }
 
   /**
    * Busca un usuario por su ID.
