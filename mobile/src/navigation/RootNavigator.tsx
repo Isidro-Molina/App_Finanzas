@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
@@ -22,7 +22,7 @@ import { ManageCategoriesScreen } from '../screens/finances/ManageCategoriesScre
 import { EditProfileScreen } from '../screens/settings/EditProfileScreen';
 import { ChangePasswordScreen } from '../screens/settings/ChangePasswordScreen';
 
-import { Wallet, Users, Settings, User, Bell } from 'lucide-react-native';
+import { TrendingUp, UsersRound, Bell, Settings, UserRound } from 'lucide-react-native';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -65,17 +65,26 @@ const MainTabs = () => {
           backgroundColor: colors.tabBg,
           borderTopColor: colors.tabBorder,
           borderTopWidth: 1,
-          height: 72,
-          paddingBottom: 12,
+          height: Platform.OS === 'ios' ? 76 : 68,
+          paddingBottom: Platform.OS === 'ios' ? 14 : 8,
           paddingTop: 8,
-          elevation: 0,
-          shadowOpacity: 0,
+          paddingHorizontal: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.06,
+          shadowRadius: 12,
+          elevation: 10,
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
         },
-        tabBarActiveTintColor: colors.tabActive,
+        tabBarActiveTintColor: colors.brand,
         tabBarInactiveTintColor: colors.tabInactive,
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontFamily: 'Inter_600SemiBold',
+          marginTop: 2,
         },
       }}
     >
@@ -83,21 +92,31 @@ const MainTabs = () => {
         name="Finanzas"
         component={DashboardScreen}
         options={{
-          tabBarIcon: ({ color, size }) => <Wallet size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <TrendingUp size={22} color={color} strokeWidth={2.2} />,
         }}
       />
       <Tab.Screen
         name="Grupos"
         component={GroupStack}
         options={{
-          tabBarIcon: ({ color, size }) => <Users size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <UsersRound size={22} color={color} strokeWidth={2.2} />,
         }}
       />
       <Tab.Screen
         name="Notificaciones"
         options={{
-          tabBarIcon: ({ color, size }) => <Bell size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Bell size={22} color={color} strokeWidth={2.2} />,
           tabBarBadge: unread > 0 ? unread : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: '#EF4444',
+            color: '#fff',
+            fontSize: 10,
+            fontFamily: 'Inter_700Bold',
+            minWidth: 16,
+            height: 16,
+            borderRadius: 8,
+            lineHeight: 16,
+          },
         }}
       >
         {() => <NotificationsScreen onUnreadChange={setUnread} />}
@@ -106,14 +125,14 @@ const MainTabs = () => {
         name="Ajustes"
         component={SettingsScreen}
         options={{
-          tabBarIcon: ({ color, size }) => <Settings size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Settings size={22} color={color} strokeWidth={2.2} />,
         }}
       />
       <Tab.Screen
-        name="Usuario"
+        name="Perfil"
         component={ProfileScreen}
         options={{
-          tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <UserRound size={22} color={color} strokeWidth={2.2} />,
         }}
       />
     </Tab.Navigator>

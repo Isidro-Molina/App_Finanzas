@@ -91,12 +91,62 @@ export class UsersService {
   }
 
   /**
-   * Elimina la cuenta del usuario autenticado.
-   * En el futuro se podría hacer un soft delete (añadir deletedAt).
+   * Elimina la cuenta del usuario autenticado limpiando sus datos asociados.
    */
   async remove(id: string) {
     await this.findById(id);
-    await this.prisma.user.delete({ where: { id } });
+
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Notificaciones y tokens
+      await tx.notification.deleteMany({ where: { userId: id } });
+      await tx.passwordResetToken.deleteMany({ where: { userId: id } });
+
+      // 2. Finanzas personales: presupuestos, transacciones y categorías propias
+      await tx.budget.deleteMany({ where: { userId: id } });
+      await tx.transaction.deleteMany({ where: { userId: id } });
+      await tx.category.deleteMany({ where: { userId: id } });
+
+      // 3. Splits y membresías
+      await tx.expenseSplit.deleteMany({ where: { userId: id } });
+      await tx.groupMember.deleteMany({ where: { userId: id } });
+
+      // 4. Si el usuario creó grupos vacíos o es creador, reasignar creador o eliminar grupos sin miembros
+      const createdGroups = await tx.group.findMany({
+        where: { createdById: id },
+        include: { members: true },
+      });
+
+      for (const group of createdGroups) {
+        if (group.members.length === 0) {
+          // Si no tiene miembros, borrar gastos y el grupo
+          const expenses = await tx.groupExpense.findMany({ where: { groupId: group.id } });
+          const expenseIds = expenses.map((e) => e.id);
+          if (expenseIds.length > 0) {
+            await tx.expenseSplit.deleteMany({ where: { groupExpenseId: { in: expenseIds } } });
+            await tx.groupExpense.deleteMany({ where: { groupId: group.id } });
+          }
+          await tx.group.delete({ where: { id: group.id } });
+        } else {
+          // Reasignar al primer miembro activo como creador
+          await tx.group.update({
+            where: { id: group.id },
+            data: { createdById: group.members[0].userId },
+          });
+        }
+      }
+
+      // 5. Gastos pagados en grupos por el usuario (splits asociados se eliminan en cascada)
+      const userExpenses = await tx.groupExpense.findMany({ where: { paidById: id } });
+      const userExpenseIds = userExpenses.map((e) => e.id);
+      if (userExpenseIds.length > 0) {
+        await tx.expenseSplit.deleteMany({ where: { groupExpenseId: { in: userExpenseIds } } });
+        await tx.groupExpense.deleteMany({ where: { paidById: id } });
+      }
+
+      // 6. Finalmente eliminar el usuario
+      await tx.user.delete({ where: { id } });
+    });
+
     return { message: 'Cuenta eliminada correctamente' };
   }
 }

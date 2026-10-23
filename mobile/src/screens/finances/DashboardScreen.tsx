@@ -8,10 +8,12 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
+  Platform,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import apiClient from '../../api/client';
 import { SpendingChart } from '../../components/SpendingChart';
+import { BudgetsSection, BudgetItem } from '../../components/BudgetsSection';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { Info, X, ChevronLeft, ChevronRight, ChevronDown, AlertCircle, RefreshCw } from 'lucide-react-native';
@@ -375,6 +377,14 @@ export const DashboardScreen = () => {
           <SpendingChart categories={summary?.byCategory ?? []} totalExpense={summary?.totalExpense ?? 0} />
         </View>
 
+        {/* Presupuestos del mes */}
+        <BudgetsSection
+          budgets={budgets as unknown as BudgetItem[]}
+          month={currentMonth}
+          year={currentYear}
+          onChanged={fetchData}
+        />
+
         {/* Expenses header — solo label, sin botón de texto */}
         <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 }}>
           <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: colors.textPrimary }}>
@@ -397,8 +407,10 @@ export const DashboardScreen = () => {
               const hasDescription = Boolean(tx.description && tx.description.trim());
 
               return (
-                <View
+                <TouchableOpacity
                   key={tx.id}
+                  activeOpacity={0.7}
+                  onPress={() => navigation.navigate('AddTransaction', { transaction: tx })}
                   style={{
                     backgroundColor: colors.bgCard,
                     borderRadius: 14,
@@ -454,7 +466,7 @@ export const DashboardScreen = () => {
                   <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: isIncome ? colors.income : colors.expense }}>
                     {isIncome ? '+' : '-'}${Math.abs(Number(tx.amount)).toLocaleString('es-AR')}
                   </Text>
-                </View>
+                </TouchableOpacity>
               );
             })
           )}
@@ -466,7 +478,7 @@ export const DashboardScreen = () => {
         onPress={() => navigation.navigate('AddTransaction')}
         style={{
           position: 'absolute',
-          bottom: 24,
+          bottom: Platform.OS === 'ios' ? 98 : 90,
           right: 20,
           width: 56,
           height: 56,

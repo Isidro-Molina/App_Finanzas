@@ -9,9 +9,9 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import apiClient from '../../api/client';
-import { ArrowLeft, Calendar, Clock } from 'lucide-react-native';
+import { ArrowLeft, Calendar, Clock, Trash2 } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -30,17 +30,30 @@ function getCategoryColor(icon: string | null, index: number): string {
 
 export const AddTransactionScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const { colors, isDark } = useTheme();
 
-  const [type, setType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const transaction = route.params?.transaction;
+  const isEditing = Boolean(transaction?.id);
+
+  const [type, setType] = useState<'EXPENSE' | 'INCOME'>(
+    transaction?.type === 'INCOME' ? 'INCOME' : 'EXPENSE'
+  );
+  const [amount, setAmount] = useState(
+    transaction?.amount ? String(Math.abs(Number(transaction.amount))) : ''
+  );
+  const [description, setDescription] = useState(transaction?.description || '');
+  const [selectedDate, setSelectedDate] = useState(
+    transaction?.date ? new Date(transaction.date) : new Date()
+  );
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
+    transaction?.categoryId || transaction?.category?.id || null
+  );
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [fetchingCategories, setFetchingCategories] = useState(true);
 
   const formattedDate = selectedDate.toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -56,9 +69,11 @@ export const AddTransactionScreen: React.FC = () => {
     try {
       const res = await apiClient.get('/categories');
       setCategories(res.data);
-      const firstMatching = res.data.find((c: Category) => c.type === type);
-      if (firstMatching && !selectedCategoryId) {
-        setSelectedCategoryId(firstMatching.id);
+      if (!selectedCategoryId) {
+        const firstMatching = res.data.find((c: Category) => c.type === type);
+        if (firstMatching) {
+          setSelectedCategoryId(firstMatching.id);
+        }
       }
     } catch (e) {
       console.error('Error fetching categories:', e);
@@ -68,6 +83,32 @@ export const AddTransactionScreen: React.FC = () => {
   };
 
   const filteredCategories = categories.filter((c) => c.type === type);
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Eliminar transacción',
+      '¿Estás seguro de que querés eliminar esta transacción? Esta acción no se puede deshacer.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              await apiClient.delete(`/transactions/${transaction.id}`);
+              navigation.goBack();
+            } catch (e: any) {
+              const msg = e.response?.data?.message || 'Error al eliminar la transacción';
+              Alert.alert('Error', Array.isArray(msg) ? msg[0] : msg);
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleSubmit = async () => {
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
@@ -81,13 +122,19 @@ export const AddTransactionScreen: React.FC = () => {
 
     setLoading(true);
     try {
-      await apiClient.post('/transactions', {
+      const payload = {
         amount: Number(amount).toFixed(2),
         type,
         categoryId: selectedCategoryId,
         description: description.trim() || undefined,
         date: selectedDate.toISOString(),
-      });
+      };
+
+      if (isEditing) {
+        await apiClient.patch(`/transactions/${transaction.id}`, payload);
+      } else {
+        await apiClient.post('/transactions', payload);
+      }
       navigation.goBack();
     } catch (e: any) {
       const msg = e.response?.data?.message || 'Error al guardar la transacción';
@@ -112,16 +159,32 @@ export const AddTransactionScreen: React.FC = () => {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       {/* Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 52, paddingBottom: 16, gap: 12 }}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <ArrowLeft size={18} color={colors.textSecondary} />
-        </TouchableOpacity>
-        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: colors.textPrimary }}>
-          Nueva Transacción
-        </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 52, paddingBottom: 16 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <ArrowLeft size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: colors.textPrimary }}>
+            {isEditing ? 'Editar Transacción' : 'Nueva Transacción'}
+          </Text>
+        </View>
+
+        {isEditing && (
+          <TouchableOpacity
+            onPress={handleDelete}
+            disabled={deleting}
+            style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: '#FEE2E2', borderWidth: 1, borderColor: '#FCA5A5', alignItems: 'center', justifyContent: 'center' }}
+          >
+            {deleting ? (
+              <ActivityIndicator size="small" color="#DC2626" />
+            ) : (
+              <Trash2 size={18} color="#DC2626" />
+            )}
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
@@ -323,7 +386,7 @@ export const AddTransactionScreen: React.FC = () => {
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>
-                Guardar Transacción
+                {isEditing ? 'Actualizar Transacción' : 'Guardar Transacción'}
               </Text>
             )}
           </TouchableOpacity>
