@@ -10,7 +10,13 @@ const DEFAULT_API_URL = Platform.select({
   default: 'http://localhost:3000/api/v1',
 });
 
-export const API_URL = DEFAULT_API_URL;
+export const API_URL = process.env.EXPO_PUBLIC_API_URL || DEFAULT_API_URL;
+
+let onUnauthorizedCallback: (() => void) | null = null;
+
+export const setOnUnauthorizedCallback = (cb: () => void) => {
+  onUnauthorizedCallback = cb;
+};
 
 const apiClient = axios.create({
   baseURL: API_URL,
@@ -36,10 +42,24 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
-// Reintento automático para requests GET que fallen por Network Error o timeout (máx 2 reintentos)
+// Interceptor de respuesta: manejo de 401 y reintentos para requests GET
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // Si el servidor responde 401 Unauthorized, limpiar la sesión
+    if (error.response?.status === 401) {
+      try {
+        await SecureStore.deleteItemAsync('app_finanzas_token');
+        await SecureStore.deleteItemAsync('app_finanzas_user');
+      } catch (e) {
+        console.error('Error al limpiar credenciales tras 401', e);
+      }
+      if (onUnauthorizedCallback) {
+        onUnauthorizedCallback();
+      }
+      return Promise.reject(error);
+    }
+
     const config = error.config as any;
     if (!config || config.method?.toLowerCase() !== 'get') {
       return Promise.reject(error);

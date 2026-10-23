@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
-import apiClient from '../api/client';
+import apiClient, { setOnUnauthorizedCallback } from '../api/client';
 
 export interface User {
   id: string;
@@ -41,6 +41,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [biometricEnabled, setBiometricEnabled] = useState(false);
 
   useEffect(() => {
+    setOnUnauthorizedCallback(() => {
+      setUser(null);
+      setToken(null);
+    });
     loadStorageData();
   }, []);
 
