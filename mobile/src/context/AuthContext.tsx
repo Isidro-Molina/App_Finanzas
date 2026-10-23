@@ -20,7 +20,7 @@ interface AuthContextData {
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
-  enableBiometric: (email: string, password: string) => Promise<void>;
+  enableBiometric: () => Promise<boolean>;
   disableBiometric: () => Promise<void>;
   loginWithBiometric: () => Promise<boolean>;
   isBiometricAvailable: () => Promise<boolean>;
@@ -30,8 +30,8 @@ const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
 const TOKEN_KEY = 'app_finanzas_token';
 const USER_KEY = 'app_finanzas_user';
-const BIOMETRIC_EMAIL_KEY = 'app_finanzas_bio_email';
-const BIOMETRIC_PASS_KEY = 'app_finanzas_bio_pass';
+const BIOMETRIC_TOKEN_KEY = 'app_finanzas_bio_token';
+const BIOMETRIC_USER_KEY = 'app_finanzas_bio_user';
 const BIOMETRIC_ENABLED_KEY = 'app_finanzas_bio_enabled';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -67,6 +67,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(userData);
     await SecureStore.setItemAsync(TOKEN_KEY, accessToken);
     await SecureStore.setItemAsync(USER_KEY, JSON.stringify(userData));
+
+    // If biometric is enabled, refresh the stored biometric session
+    const bioEnabled = await SecureStore.getItemAsync(BIOMETRIC_ENABLED_KEY);
+    if (bioEnabled === 'true') {
+      await SecureStore.setItemAsync(BIOMETRIC_TOKEN_KEY, accessToken);
+      await SecureStore.setItemAsync(BIOMETRIC_USER_KEY, JSON.stringify(userData));
+    }
   }
 
   async function login(email: string, password: string) {
@@ -91,7 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(null);
     await SecureStore.deleteItemAsync(TOKEN_KEY);
     await SecureStore.deleteItemAsync(USER_KEY);
-    // Don't clear biometric credentials on logout — user stays enrolled
+    // User stays enrolled for biometric quick-login if enabled
   }
 
   async function refreshProfile() {
@@ -110,22 +117,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return compatible && enrolled;
   }
 
-  async function enableBiometric(email: string, password: string) {
-    await SecureStore.setItemAsync(BIOMETRIC_EMAIL_KEY, email);
-    await SecureStore.setItemAsync(BIOMETRIC_PASS_KEY, password);
+  async function enableBiometric(): Promise<boolean> {
+    if (!token || !user) return false;
+
+    const auth = await LocalAuthentication.authenticateAsync({
+      promptMessage: 'Confirmá tu identidad para activar el acceso biométrico',
+      fallbackLabel: 'Cancelar',
+    });
+
+    if (!auth.success) return false;
+
+    await SecureStore.setItemAsync(BIOMETRIC_TOKEN_KEY, token);
+    await SecureStore.setItemAsync(BIOMETRIC_USER_KEY, JSON.stringify(user));
     await SecureStore.setItemAsync(BIOMETRIC_ENABLED_KEY, 'true');
+    // Clean up any legacy cleartext password keys
+    await SecureStore.deleteItemAsync('app_finanzas_bio_pass');
+    await SecureStore.deleteItemAsync('app_finanzas_bio_email');
     setBiometricEnabled(true);
+    return true;
   }
 
   async function disableBiometric() {
-    await SecureStore.deleteItemAsync(BIOMETRIC_EMAIL_KEY);
-    await SecureStore.deleteItemAsync(BIOMETRIC_PASS_KEY);
+    await SecureStore.deleteItemAsync(BIOMETRIC_TOKEN_KEY);
+    await SecureStore.deleteItemAsync(BIOMETRIC_USER_KEY);
+    await SecureStore.deleteItemAsync('app_finanzas_bio_pass');
+    await SecureStore.deleteItemAsync('app_finanzas_bio_email');
     await SecureStore.setItemAsync(BIOMETRIC_ENABLED_KEY, 'false');
     setBiometricEnabled(false);
   }
 
   async function loginWithBiometric(): Promise<boolean> {
     try {
+      const bioEnabled = await SecureStore.getItemAsync(BIOMETRIC_ENABLED_KEY);
+      if (bioEnabled !== 'true') return false;
+
+      const bioToken = await SecureStore.getItemAsync(BIOMETRIC_TOKEN_KEY);
+      const bioUserStr = await SecureStore.getItemAsync(BIOMETRIC_USER_KEY);
+
+      if (!bioToken || !bioUserStr) return false;
+
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: 'Verificá tu identidad',
         fallbackLabel: 'Usar contraseña',
@@ -135,13 +165,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!result.success) return false;
 
-      const email = await SecureStore.getItemAsync(BIOMETRIC_EMAIL_KEY);
-      const password = await SecureStore.getItemAsync(BIOMETRIC_PASS_KEY);
-
-      if (!email || !password) return false;
-
-      await login(email, password);
-      return true;
+      // Validate token with server to ensure it is still active
+      try {
+        const verifyRes = await apiClient.get('/auth/me', {
+          headers: { Authorization: `Bearer ${bioToken}` },
+        });
+        await saveSession(bioToken, verifyRes.data);
+        return true;
+      } catch (err) {
+        console.warn('Biometric session expired or invalid:', err);
+        return false;
+      }
     } catch (e) {
       console.error('Biometric login failed:', e);
       return false;

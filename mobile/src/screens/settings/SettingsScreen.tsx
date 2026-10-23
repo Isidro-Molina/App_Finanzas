@@ -59,40 +59,23 @@ export const SettingsScreen = () => {
   const navigation = useNavigation<any>();
   const [notifications, setNotifications] = useState(true);
 
-  const [showBioModal, setShowBioModal] = useState(false);
-  const [bioPassword, setBioPassword] = useState('');
-  const [bioLoading, setBioLoading] = useState(false);
-  
   const handleToggleBiometric = async () => {
     if (biometricEnabled) {
       await disableBiometric();
+      Alert.alert('Desactivado', 'El acceso biométrico fue desactivado.');
     } else {
       const available = await isBiometricAvailable();
       if (!available) {
-        Alert.alert('No disponible', 'Tu dispositivo no soporta o no tiene configurada la autenticación biométrica (Face ID / Huella).');
+        Alert.alert(
+          'No disponible',
+          'Tu dispositivo no soporta o no tiene configurada la autenticación biométrica (Face ID / Huella).',
+        );
         return;
       }
-      setShowBioModal(true);
-    }
-  };
-
-  const confirmEnableBiometric = async () => {
-    if (!bioPassword) {
-      Alert.alert('Error', 'Ingresá tu contraseña para habilitar esta función.');
-      return;
-    }
-    setBioLoading(true);
-    try {
-      // In a real app, you might want to verify the password against the API first,
-      // but the AuthContext will just store it for future logins. 
-      await enableBiometric(user?.email || '', bioPassword);
-      setShowBioModal(false);
-      setBioPassword('');
-      Alert.alert('¡Listo!', 'El inicio de sesión biométrico fue activado.');
-    } catch (error) {
-      Alert.alert('Error', 'No se pudo activar la biometría.');
-    } finally {
-      setBioLoading(false);
+      const success = await enableBiometric();
+      if (success) {
+        Alert.alert('¡Listo!', 'El inicio de sesión biométrico fue activado.');
+      }
     }
   };
 
@@ -328,60 +311,6 @@ export const SettingsScreen = () => {
           Finova v1.0.0
         </Text>
       </ScrollView>
-
-      {/* Password prompt for biometric */}
-      <Modal visible={showBioModal} transparent animationType="fade" onRequestClose={() => setShowBioModal(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 24 }}>
-          <View style={{ backgroundColor: colors.bgCard, borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 10 }}>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: colors.textPrimary, marginBottom: 8 }}>
-              Habilitar Face ID / Huella
-            </Text>
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textMuted, marginBottom: 20 }}>
-              Por seguridad, ingresá tu contraseña actual para autorizar el inicio de sesión biométrico.
-            </Text>
-            
-            <TextInput
-              value={bioPassword}
-              onChangeText={setBioPassword}
-              placeholder="Tu contraseña"
-              placeholderTextColor={colors.textMuted}
-              secureTextEntry
-              autoFocus
-              style={{
-                borderWidth: 1.5,
-                borderColor: colors.border,
-                borderRadius: 14,
-                paddingHorizontal: 16,
-                paddingVertical: 14,
-                fontSize: 15,
-                fontFamily: 'Inter_500Medium',
-                color: colors.textPrimary,
-                marginBottom: 24,
-                backgroundColor: colors.bgInput,
-              }}
-            />
-
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <TouchableOpacity
-                onPress={() => { setShowBioModal(false); setBioPassword(''); }}
-                style={{ flex: 1, paddingVertical: 14, backgroundColor: colors.bgSubtle, borderRadius: 12, alignItems: 'center' }}
-              >
-                <Text style={{ fontFamily: 'Inter_600SemiBold', color: colors.textSecondary }}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={confirmEnableBiometric}
-                disabled={bioLoading}
-                style={{ flex: 1, paddingVertical: 14, backgroundColor: colors.brand, borderRadius: 12, alignItems: 'center' }}
-              >
-                {bioLoading
-                  ? <ActivityIndicator color="#fff" />
-                  : <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#fff' }}>Confirmar</Text>
-                }
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };
