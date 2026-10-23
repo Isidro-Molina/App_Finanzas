@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { Users, Receipt, BellOff, CheckCheck } from 'lucide-react-native';
+import { Users, Receipt, BellOff, CheckCheck, Trash2 } from 'lucide-react-native';
 import apiClient from '../../api/client';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -74,6 +74,64 @@ export const NotificationsScreen = ({ onUnreadChange }: Props) => {
     }
   };
 
+  const deleteOne = (id: string) => {
+    Alert.alert('Eliminar notificación', '¿Querés eliminar esta notificación?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const target = items.find((n) => n.id === id);
+            await apiClient.delete(`/notifications/${id}`);
+            const updated = items.filter((n) => n.id !== id);
+            setItems(updated);
+            if (target && !target.isRead) {
+              onUnreadChange?.(Math.max(0, unreadCount - 1));
+            }
+          } catch (e) {
+            console.error('Error eliminando notificación', e);
+          }
+        },
+      },
+    ]);
+  };
+
+  const clearAll = () => {
+    Alert.alert(
+      'Vaciar notificaciones',
+      '¿Qué querés eliminar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Solo las leídas',
+          onPress: async () => {
+            try {
+              await apiClient.delete('/notifications?onlyRead=true');
+              const remaining = items.filter((n) => !n.isRead);
+              setItems(remaining);
+            } catch (e) {
+              console.error('Error limpiando leídas', e);
+            }
+          },
+        },
+        {
+          text: 'Todas',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiClient.delete('/notifications');
+              setItems([]);
+              onUnreadChange?.(0);
+            } catch (e) {
+              console.error('Error vaciando notificaciones', e);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const respondInvite = async (n: AppNotification, action: 'accept' | 'reject') => {
     if (!n.relatedId) return;
     setRespondingId(n.id);
@@ -135,7 +193,12 @@ export const NotificationsScreen = ({ onUnreadChange }: Props) => {
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text style={{ flex: 1, fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.textPrimary }}>{item.title}</Text>
-            {!item.isRead && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444', marginLeft: 8 }} />}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {!item.isRead && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' }} />}
+              <TouchableOpacity onPress={() => deleteOne(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Trash2 size={15} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
           </View>
           <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textMuted, marginTop: 2, lineHeight: 18 }}>{item.message}</Text>
           <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: colors.textMuted, marginTop: 6 }}>{timeAgo(item.createdAt)}</Text>
@@ -179,12 +242,20 @@ export const NotificationsScreen = ({ onUnreadChange }: Props) => {
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: 60, paddingHorizontal: 20 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <Text style={{ fontFamily: 'Outfit_800ExtraBold', fontSize: 28, color: colors.textPrimary }}>Notificaciones</Text>
-        {unreadCount > 0 && (
-          <TouchableOpacity onPress={markAllRead} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <CheckCheck size={16} color={colors.brand} />
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.brand }}>Marcar todas</Text>
-          </TouchableOpacity>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          {unreadCount > 0 && (
+            <TouchableOpacity onPress={markAllRead} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <CheckCheck size={16} color={colors.brand} />
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.brand }}>Leídas</Text>
+            </TouchableOpacity>
+          )}
+          {items.length > 0 && (
+            <TouchableOpacity onPress={clearAll} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Trash2 size={15} color="#EF4444" />
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#EF4444' }}>Vaciar</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {loading ? (

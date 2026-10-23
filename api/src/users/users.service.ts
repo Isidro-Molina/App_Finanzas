@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -83,10 +88,14 @@ export class UsersService {
     if (!user) throw new NotFoundException('Usuario no encontrado');
 
     const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
-    if (!valid) throw new UnauthorizedException('La contraseña actual es incorrecta');
+    if (!valid)
+      throw new UnauthorizedException('La contraseña actual es incorrecta');
 
     const newHash = await bcrypt.hash(dto.newPassword, 12);
-    await this.prisma.user.update({ where: { id }, data: { passwordHash: newHash } });
+    await this.prisma.user.update({
+      where: { id },
+      data: { passwordHash: newHash },
+    });
     return { message: 'Contraseña actualizada correctamente' };
   }
 
@@ -119,10 +128,14 @@ export class UsersService {
       for (const group of createdGroups) {
         if (group.members.length === 0) {
           // Si no tiene miembros, borrar gastos y el grupo
-          const expenses = await tx.groupExpense.findMany({ where: { groupId: group.id } });
+          const expenses = await tx.groupExpense.findMany({
+            where: { groupId: group.id },
+          });
           const expenseIds = expenses.map((e) => e.id);
           if (expenseIds.length > 0) {
-            await tx.expenseSplit.deleteMany({ where: { groupExpenseId: { in: expenseIds } } });
+            await tx.expenseSplit.deleteMany({
+              where: { groupExpenseId: { in: expenseIds } },
+            });
             await tx.groupExpense.deleteMany({ where: { groupId: group.id } });
           }
           await tx.group.delete({ where: { id: group.id } });
@@ -136,10 +149,14 @@ export class UsersService {
       }
 
       // 5. Gastos pagados en grupos por el usuario (splits asociados se eliminan en cascada)
-      const userExpenses = await tx.groupExpense.findMany({ where: { paidById: id } });
+      const userExpenses = await tx.groupExpense.findMany({
+        where: { paidById: id },
+      });
       const userExpenseIds = userExpenses.map((e) => e.id);
       if (userExpenseIds.length > 0) {
-        await tx.expenseSplit.deleteMany({ where: { groupExpenseId: { in: userExpenseIds } } });
+        await tx.expenseSplit.deleteMany({
+          where: { groupExpenseId: { in: userExpenseIds } },
+        });
         await tx.groupExpense.deleteMany({ where: { paidById: id } });
       }
 

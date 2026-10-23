@@ -4,7 +4,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 
 // El payload que firmamos al generar el JWT
 export interface JwtPayload {
-  sub: string;  // userId
+  sub: string; // userId
   email: string;
 }
 

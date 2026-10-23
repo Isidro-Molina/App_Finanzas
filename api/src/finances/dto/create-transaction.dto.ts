@@ -11,7 +11,10 @@ import {
 import { TransactionType } from '@prisma/client';
 
 export class CreateTransactionDto {
-  @IsDecimal({ decimal_digits: '0,2' }, { message: 'El monto debe ser un número decimal válido' })
+  @IsDecimal(
+    { decimal_digits: '0,2' },
+    { message: 'El monto debe ser un número decimal válido' },
+  )
   @IsNotEmpty()
   amount: string; // Llega como string, Prisma lo convierte a Decimal
 

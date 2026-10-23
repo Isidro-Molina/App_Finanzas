@@ -17,12 +17,14 @@ export class BudgetsService {
   async findAll(userId: string, month: number, year: number) {
     const budgets = await this.prisma.budget.findMany({
       where: { userId, month, year },
-      include: { category: { select: { id: true, name: true, icon: true, type: true } } },
+      include: {
+        category: { select: { id: true, name: true, icon: true, type: true } },
+      },
     });
 
     // Para cada presupuesto, calcular el gasto real del mes
     const start = new Date(year, month - 1, 1);
-    const end   = new Date(year, month, 1);
+    const end = new Date(year, month, 1);
 
     return Promise.all(
       budgets.map(async (budget) => {
@@ -41,12 +43,13 @@ export class BudgetsService {
 
         return {
           ...budget,
-          amount:    budgetAmount,
-          spent:     +spentAmount.toFixed(2),
+          amount: budgetAmount,
+          spent: +spentAmount.toFixed(2),
           remaining: +(budgetAmount - spentAmount).toFixed(2),
-          pctUsed:   budgetAmount > 0
-            ? +((spentAmount / budgetAmount) * 100).toFixed(1)
-            : 0,
+          pctUsed:
+            budgetAmount > 0
+              ? +((spentAmount / budgetAmount) * 100).toFixed(1)
+              : 0,
         };
       }),
     );
@@ -59,17 +62,17 @@ export class BudgetsService {
         userId_categoryId_month_year: {
           userId,
           categoryId: dto.categoryId,
-          month:      dto.month,
-          year:       dto.year,
+          month: dto.month,
+          year: dto.year,
         },
       },
       update: { amount: dto.amount },
       create: {
         userId,
         categoryId: dto.categoryId,
-        month:      dto.month,
-        year:       dto.year,
-        amount:     dto.amount,
+        month: dto.month,
+        year: dto.year,
+        amount: dto.amount,
       },
       include: { category: { select: { id: true, name: true, icon: true } } },
     });
@@ -77,8 +80,9 @@ export class BudgetsService {
 
   async remove(userId: string, id: string) {
     const budget = await this.prisma.budget.findUnique({ where: { id } });
-    if (!budget)               throw new NotFoundException('Presupuesto no encontrado');
-    if (budget.userId !== userId) throw new ForbiddenException('No tenés permiso');
+    if (!budget) throw new NotFoundException('Presupuesto no encontrado');
+    if (budget.userId !== userId)
+      throw new ForbiddenException('No tenés permiso');
 
     await this.prisma.budget.delete({ where: { id } });
     return { message: 'Presupuesto eliminado' };

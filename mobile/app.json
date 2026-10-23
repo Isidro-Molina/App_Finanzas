@@ -28,7 +28,8 @@
       "expo-font",
       "@react-native-community/datetimepicker",
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-sharing"
     ],
     "scheme": "finova"
   }

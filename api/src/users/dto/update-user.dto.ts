@@ -1,4 +1,11 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength, MaxLength } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MinLength,
+  MaxLength,
+} from 'class-validator';
 
 /**
  * DTO para actualizar el perfil del usuario autenticado.
@@ -7,12 +14,14 @@ import { IsEmail, IsNotEmpty, IsString, MinLength, MaxLength } from 'class-valid
  * La creación de usuario (con password) vive en AuthModule/dto/register.dto.ts
  */
 export class UpdateUserDto {
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
   @MinLength(2)
   @MaxLength(50)
   name?: string;
 
+  @IsOptional()
   @IsEmail()
   email?: string;
 }

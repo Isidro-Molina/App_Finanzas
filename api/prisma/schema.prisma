@@ -65,6 +65,8 @@ model Category {
   userId String?
   user   User?   @relation(fields: [userId], references: [id])
 
+  isDeleted Boolean @default(false)
+
   transactions  Transaction[]
   budgets       Budget[]
   groupExpenses GroupExpense[]
@@ -85,6 +87,8 @@ model Transaction {
   category   Category @relation(fields: [categoryId], references: [id])
 
   expenseSplit ExpenseSplit?
+
+  @@index([userId, date])
 }
 
 // Presupuesto mensual por categoría (ej: $50.000 en "Salidas" para Agosto 2025)
@@ -115,6 +119,7 @@ model Group {
   description String?  // Descripción opcional del grupo
   icon        String?  // Emoji o ícono opcional
   isSettled   Boolean  @default(false) // true = grupo saldado/cerrado
+  strictPayments Boolean @default(false) // true = solo quien pagó puede confirmar cobros
   createdAt   DateTime @default(now())
 
   createdById String
@@ -156,6 +161,8 @@ model GroupExpense {
   category   Category? @relation(fields: [categoryId], references: [id])
 
   splits ExpenseSplit[]
+
+  @@index([groupId, date])
 }
 
 // Cómo se divide ese ticket (Ej: Pedro debe $2.500, María debe $2.500)

@@ -20,20 +20,22 @@ export class TransactionsService {
     // Filtro por mes/año: construir rango de fechas
     if (query.month && query.year) {
       const start = new Date(query.year, query.month - 1, 1);
-      const end   = new Date(query.year, query.month, 1); // Primer día del mes siguiente
-      where.date  = { gte: start, lt: end };
+      const end = new Date(query.year, query.month, 1); // Primer día del mes siguiente
+      where.date = { gte: start, lt: end };
     } else if (query.year) {
       const start = new Date(query.year, 0, 1);
-      const end   = new Date(query.year + 1, 0, 1);
-      where.date  = { gte: start, lt: end };
+      const end = new Date(query.year + 1, 0, 1);
+      where.date = { gte: start, lt: end };
     }
 
-    if (query.type)       where.type       = query.type;
+    if (query.type) where.type = query.type;
     if (query.categoryId) where.categoryId = query.categoryId;
 
     return this.prisma.transaction.findMany({
       where,
-      include: { category: { select: { id: true, name: true, icon: true, type: true } } },
+      include: {
+        category: { select: { id: true, name: true, icon: true, type: true } },
+      },
       orderBy: { date: 'desc' },
     });
   }
@@ -42,29 +44,32 @@ export class TransactionsService {
 
   async getSummary(userId: string, month: number, year: number) {
     const start = new Date(year, month - 1, 1);
-    const end   = new Date(year, month, 1);
+    const end = new Date(year, month, 1);
 
     const transactions = await this.prisma.transaction.findMany({
       where: { userId, date: { gte: start, lt: end } },
       include: { category: { select: { id: true, name: true, icon: true } } },
     });
 
-    let totalIncome  = 0;
+    let totalIncome = 0;
     let totalExpense = 0;
-    const byCategory: Record<string, { name: string; icon: string | null; total: number; type: string }> = {};
+    const byCategory: Record<
+      string,
+      { name: string; icon: string | null; total: number; type: string }
+    > = {};
 
     for (const tx of transactions) {
       const amount = Number(tx.amount);
-      if (tx.type === 'INCOME')  totalIncome  += amount;
-      else                       totalExpense += amount;
+      if (tx.type === 'INCOME') totalIncome += amount;
+      else totalExpense += amount;
 
       const key = tx.categoryId;
       if (!byCategory[key]) {
         byCategory[key] = {
-          name:  tx.category.name,
-          icon:  tx.category.icon,
+          name: tx.category.name,
+          icon: tx.category.icon,
           total: 0,
-          type:  tx.type,
+          type: tx.type,
         };
       }
       byCategory[key].total += amount;
@@ -73,10 +78,10 @@ export class TransactionsService {
     return {
       month,
       year,
-      totalIncome:  +totalIncome.toFixed(2),
+      totalIncome: +totalIncome.toFixed(2),
       totalExpense: +totalExpense.toFixed(2),
-      balance:      +(totalIncome - totalExpense).toFixed(2),
-      byCategory:   Object.values(byCategory).sort((a, b) => b.total - a.total),
+      balance: +(totalIncome - totalExpense).toFixed(2),
+      byCategory: Object.values(byCategory).sort((a, b) => b.total - a.total),
     };
   }
 
@@ -86,13 +91,15 @@ export class TransactionsService {
     return this.prisma.transaction.create({
       data: {
         userId,
-        amount:      dto.amount,
-        type:        dto.type,
-        categoryId:  dto.categoryId,
+        amount: dto.amount,
+        type: dto.type,
+        categoryId: dto.categoryId,
         description: dto.description,
-        date:        dto.date ? new Date(dto.date) : new Date(),
+        date: dto.date ? new Date(dto.date) : new Date(),
       },
-      include: { category: { select: { id: true, name: true, icon: true, type: true } } },
+      include: {
+        category: { select: { id: true, name: true, icon: true, type: true } },
+      },
     });
   }
 
@@ -104,13 +111,15 @@ export class TransactionsService {
     return this.prisma.transaction.update({
       where: { id },
       data: {
-        ...(dto.amount      && { amount:      dto.amount }),
-        ...(dto.type        && { type:        dto.type }),
-        ...(dto.categoryId  && { categoryId:  dto.categoryId }),
+        ...(dto.amount && { amount: dto.amount }),
+        ...(dto.type && { type: dto.type }),
+        ...(dto.categoryId && { categoryId: dto.categoryId }),
         ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.date        && { date:        new Date(dto.date) }),
+        ...(dto.date && { date: new Date(dto.date) }),
       },
-      include: { category: { select: { id: true, name: true, icon: true, type: true } } },
+      include: {
+        category: { select: { id: true, name: true, icon: true, type: true } },
+      },
     });
   }
 
@@ -122,11 +131,38 @@ export class TransactionsService {
     return { message: 'Transacción eliminada' };
   }
 
+  // ─── Exportar CSV ────────────────────────────────────────────────────────
+
+  async exportCsv(userId: string): Promise<string> {
+    const transactions = await this.prisma.transaction.findMany({
+      where: { userId },
+      include: { category: true },
+      orderBy: { date: 'desc' },
+    });
+
+    const headers = ['Fecha', 'Tipo', 'Categoría', 'Descripción', 'Monto'];
+    const rows = transactions.map((t) => {
+      const dateStr = t.date.toISOString().split('T')[0];
+      const typeStr = t.type === 'INCOME' ? 'Ingreso' : 'Gasto';
+      const catStr = t.category?.name
+        ? `"${t.category.name.replace(/"/g, '""')}"`
+        : 'Sin categoría';
+      const descStr = t.description
+        ? `"${t.description.replace(/"/g, '""')}"`
+        : '';
+      const amountStr = Number(t.amount).toFixed(2);
+      return [dateStr, typeStr, catStr, descStr, amountStr].join(',');
+    });
+
+    return [headers.join(','), ...rows].join('\n');
+  }
+
   // ─── Helper privado ──────────────────────────────────────────────────────
 
   private async assertOwnership(userId: string, id: string) {
     const tx = await this.prisma.transaction.findUnique({ where: { id } });
-    if (!tx)              throw new NotFoundException('Transacción no encontrada');
-    if (tx.userId !== userId) throw new ForbiddenException('No tenés permiso sobre esta transacción');
+    if (!tx) throw new NotFoundException('Transacción no encontrada');
+    if (tx.userId !== userId)
+      throw new ForbiddenException('No tenés permiso sobre esta transacción');
   }
 }

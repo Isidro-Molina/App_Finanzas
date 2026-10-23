@@ -108,7 +108,11 @@ export class GroupsController {
     @Param('id') groupId: string,
     @Param('userId') targetUserId: string,
   ) {
-    return this.groupsService.removeMember(req.user.userId, groupId, targetUserId);
+    return this.groupsService.removeMember(
+      req.user.userId,
+      groupId,
+      targetUserId,
+    );
   }
 
   /** PATCH /api/v1/groups/:id/members/:userId/role — Promover/degradar (solo ADMIN) */
@@ -119,7 +123,12 @@ export class GroupsController {
     @Param('userId') targetUserId: string,
     @Body() dto: SetMemberRoleDto,
   ) {
-    return this.groupsService.setMemberRole(req.user.userId, groupId, targetUserId, dto.role);
+    return this.groupsService.setMemberRole(
+      req.user.userId,
+      groupId,
+      targetUserId,
+      dto.role,
+    );
   }
 
   /** GET /api/v1/groups/:id/invitations — Invitaciones pendientes (solo ADMIN) */
@@ -135,7 +144,11 @@ export class GroupsController {
     @Param('id') groupId: string,
     @Param('userId') targetUserId: string,
   ) {
-    return this.groupsService.cancelInvitation(req.user.userId, groupId, targetUserId);
+    return this.groupsService.cancelInvitation(
+      req.user.userId,
+      groupId,
+      targetUserId,
+    );
   }
 
   /** POST /api/v1/groups/:id/suggest-member — Sugerir miembro al admin */
@@ -191,7 +204,12 @@ export class GroupsController {
     @Param('expenseId') expenseId: string,
     @Param('splitId') splitId: string,
   ) {
-    return this.expensesService.toggleSplitPaid(req.user.userId, groupId, expenseId, splitId);
+    return this.expensesService.toggleSplitPaid(
+      req.user.userId,
+      groupId,
+      expenseId,
+      splitId,
+    );
   }
 
   // ── Balance y saldos ────────────────────────────────────────────────────────

@@ -1,4 +1,11 @@
-import { IsEmail, IsString, Length, Matches, MinLength, MaxLength } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  Length,
+  Matches,
+  MinLength,
+  MaxLength,
+} from 'class-validator';
 
 export class ResetPasswordDto {
   @IsEmail({}, { message: 'El email no tiene un formato válido' })

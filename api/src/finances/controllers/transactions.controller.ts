@@ -48,8 +48,18 @@ export class TransactionsController {
     return this.transactionsService.getSummary(
       req.user.userId,
       query.month ?? now.getMonth() + 1,
-      query.year  ?? now.getFullYear(),
+      query.year ?? now.getFullYear(),
     );
+  }
+
+  /**
+   * GET /api/v1/transactions/export-csv
+   * Exporta todas las transacciones del usuario en formato CSV
+   */
+  @Get('export-csv')
+  async exportCsv(@Request() req: { user: { userId: string } }) {
+    const csv = await this.transactionsService.exportCsv(req.user.userId);
+    return { csv };
   }
 
   /** POST /api/v1/transactions */

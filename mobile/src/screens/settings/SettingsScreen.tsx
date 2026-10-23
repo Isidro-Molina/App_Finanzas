@@ -20,6 +20,8 @@ import {
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import apiClient from '../../api/client';
+import { Paths, File } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 const Toggle = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
   <TouchableOpacity
@@ -135,6 +137,65 @@ export const SettingsScreen = () => {
     );
   };
 
+  const [exportingCsv, setExportingCsv] = useState(false);
+
+  const handleExportCsv = async () => {
+    setExportingCsv(true);
+    try {
+      const res = await apiClient.get('/transactions/export-csv');
+      const csvData = res.data.csv;
+      if (!csvData) {
+        Alert.alert('Sin datos', 'No tenés transacciones registradas para exportar.');
+        return;
+      }
+
+      const file = new File(Paths.document, 'finanzas_transacciones.csv');
+      if (file.exists) {
+        file.delete();
+      }
+      file.create();
+      file.write(csvData);
+
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(file.uri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Exportar transacciones',
+          UTI: 'public.comma-separated-values-text',
+        });
+      } else {
+        Alert.alert('Éxito', `Archivo guardado en: ${file.uri}`);
+      }
+    } catch (e: any) {
+      const msg = e.response?.data?.message || 'Error al exportar los datos';
+      Alert.alert('Error', Array.isArray(msg) ? msg[0] : msg);
+    } finally {
+      setExportingCsv(false);
+    }
+  };
+
+  const handleHelpCenter = () => {
+    Alert.alert(
+      'Centro de Ayuda',
+      'Finova te permite gestionar tus finanzas personales y dividir gastos en grupos de forma colaborativa.\n\n• Finanzas: Gestioná tus ingresos, gastos y límites mensuales por categoría.\n• Grupos: Creá grupos, cargá gastos compartidos y liquidá deudas fácilmente.\n\n¿Tenés consultas? Escribinos a soporte@finova.app'
+    );
+  };
+
+  const handleRateApp = () => {
+    Alert.alert(
+      'Calificar Finova',
+      '¡Gracias por usar Finova! Si te gusta la app, dejanos tus 5 estrellas en la tienda.',
+      [{ text: '¡Claro que sí!' }]
+    );
+  };
+
+  const handleTerms = () => {
+    Alert.alert(
+      'Términos y Privacidad',
+      'Finova protege tu privacidad y tus datos financieros.\n\n• Tus datos son confidenciales y están cifrados.\n• No compartimos información con terceros.\n• Podés eliminar tu cuenta y tus datos en cualquier momento desde esta pantalla.'
+    );
+  };
+
   const SectionTitle = ({ label }: { label: string }) => (
     <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8, paddingHorizontal: 4 }}>
       {label}
@@ -227,10 +288,15 @@ export const SettingsScreen = () => {
 
         {/* Categorías */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
-          <SectionTitle label="Categorías" />
+          <SectionTitle label="Categorías y Datos" />
           <View style={cardStyle}>
             <Row icon={Tag} label="Gestionar categorías" onPress={() => navigation.navigate('ManageCategories')} />
-            <Row icon={BarChart2} label="Exportar datos (CSV)" border={false} />
+            <Row
+              icon={BarChart2}
+              label={exportingCsv ? 'Exportando...' : 'Exportar datos (CSV)'}
+              border={false}
+              onPress={exportingCsv ? undefined : handleExportCsv}
+            />
           </View>
         </View>
 
@@ -238,9 +304,9 @@ export const SettingsScreen = () => {
         <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
           <SectionTitle label="Soporte" />
           <View style={cardStyle}>
-            <Row icon={HelpCircle} label="Centro de ayuda" />
-            <Row icon={Star} label="Calificar la app" />
-            <Row icon={FileText} label="Términos y privacidad" border={false} />
+            <Row icon={HelpCircle} label="Centro de ayuda" onPress={handleHelpCenter} />
+            <Row icon={Star} label="Calificar la app" onPress={handleRateApp} />
+            <Row icon={FileText} label="Términos y privacidad" border={false} onPress={handleTerms} />
           </View>
         </View>
 

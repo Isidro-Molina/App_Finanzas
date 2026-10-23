@@ -17,6 +17,7 @@ import { BudgetsSection, BudgetItem } from '../../components/BudgetsSection';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { Info, X, ChevronLeft, ChevronRight, ChevronDown, AlertCircle, RefreshCw } from 'lucide-react-native';
+import { formatCurrency, formatAmount } from '../../utils/currency';
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -350,7 +351,7 @@ export const DashboardScreen = () => {
               Gastos del Mes
             </Text>
             <Text style={{ fontFamily: 'Outfit_800ExtraBold', fontSize: 42, color: '#fff', marginBottom: hasIncome ? 16 : 0, letterSpacing: -0.5 }}>
-              ${totalSpent.toLocaleString('es-AR')}
+              {formatCurrency(totalSpent)}
             </Text>
 
             {hasIncome && (
@@ -364,7 +365,7 @@ export const DashboardScreen = () => {
                     {spentPct}% de tus ingresos
                   </Text>
                   <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: balance >= 0 ? 'rgba(255,255,255,0.85)' : '#FCA5A5' }}>
-                    {balance >= 0 ? `Disponible: $${balance.toLocaleString('es-AR')}` : `Excedido: $${Math.abs(balance).toLocaleString('es-AR')}`}
+                    {balance >= 0 ? `Disponible: ${formatCurrency(balance)}` : `Excedido: ${formatCurrency(Math.abs(balance))}`}
                   </Text>
                 </View>
               </>
@@ -464,7 +465,7 @@ export const DashboardScreen = () => {
                   </View>
 
                   <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: isIncome ? colors.income : colors.expense }}>
-                    {isIncome ? '+' : '-'}${Math.abs(Number(tx.amount)).toLocaleString('es-AR')}
+                    {isIncome ? '+' : '-'}${formatAmount(Math.abs(Number(tx.amount)))}
                   </Text>
                 </TouchableOpacity>
               );

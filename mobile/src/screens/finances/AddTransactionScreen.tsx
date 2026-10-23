@@ -111,7 +111,9 @@ export const AddTransactionScreen: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+    const cleanAmount = amount.replace(',', '.');
+    const parsedAmount = Number(cleanAmount);
+    if (!cleanAmount || isNaN(parsedAmount) || parsedAmount <= 0) {
       Alert.alert('Monto inválido', 'Por favor ingresá un monto mayor a cero');
       return;
     }
@@ -123,7 +125,7 @@ export const AddTransactionScreen: React.FC = () => {
     setLoading(true);
     try {
       const payload = {
-        amount: Number(amount).toFixed(2),
+        amount: parsedAmount.toFixed(2),
         type,
         categoryId: selectedCategoryId,
         description: description.trim() || undefined,

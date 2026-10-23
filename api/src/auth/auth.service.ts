@@ -151,7 +151,8 @@ export class AuthService {
    */
   async forgotPassword(dto: ForgotPasswordDto) {
     const genericResponse = {
-      message: 'Si el email está registrado, te enviamos un código para restablecer tu contraseña.',
+      message:
+        'Si el email está registrado, te enviamos un código para restablecer tu contraseña.',
     };
 
     const user = await this.usersService.findByEmail(dto.email);
@@ -210,7 +211,10 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.newPassword, 12);
     await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id: user.id }, data: { passwordHash } }),
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash },
+      }),
       this.prisma.passwordResetToken.update({
         where: { id: token.id },
         data: { usedAt: new Date() },
