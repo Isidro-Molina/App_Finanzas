@@ -20,6 +20,19 @@ interface Member {
   role: string;
 }
 
+interface Category {
+  id: string;
+  name: string;
+  icon: string | null;
+  type: 'INCOME' | 'EXPENSE';
+}
+
+function getCategoryColor(icon: string | null, index: number): string {
+  const palette = ['#2563EB', '#7C3AED', '#DB2777', '#059669', '#D97706', '#0891B2', '#DC2626', '#65A30D'];
+  if (icon && icon.startsWith('#')) return icon;
+  return palette[index % palette.length];
+}
+
 interface ParticipantSplit {
   userId: string;
   name: string;
@@ -38,6 +51,8 @@ export const AddGroupExpenseScreen: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMembers, setLoadingMembers] = useState(true);
 
@@ -48,23 +63,36 @@ export const AddGroupExpenseScreen: React.FC = () => {
   const formattedTime = selectedDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
 
   useEffect(() => {
-    const fetchMembers = async () => {
+    const fetchData = async () => {
       try {
-        const res = await apiClient.get(`/groups/${groupId}`);
-        const members: Member[] = res.data.members || [];
+        const [membersRes, catsRes] = await Promise.all([
+          apiClient.get(`/groups/${groupId}`),
+          apiClient.get('/categories'),
+        ]);
+
+        const members: Member[] = membersRes.data.members || [];
         setParticipants(members.map((m) => ({
           userId: m.user.id,
           name: m.user.name,
           included: true,
           amount: '',
         })));
+
+        const expenseCats = (catsRes.data as Category[]).filter((c) => c.type === 'EXPENSE');
+        setCategories(expenseCats);
+        const otros = expenseCats.find((c) => c.name === 'Otros');
+        if (otros) {
+          setSelectedCategoryId(otros.id);
+        } else if (expenseCats.length > 0) {
+          setSelectedCategoryId(expenseCats[0].id);
+        }
       } catch (e) {
-        console.error('Error loading members:', e);
+        console.error('Error loading members or categories:', e);
       } finally {
         setLoadingMembers(false);
       }
     };
-    fetchMembers();
+    fetchData();
   }, [groupId]);
 
   const includedParticipants = participants.filter((p) => p.included);
@@ -113,9 +141,10 @@ export const AddGroupExpenseScreen: React.FC = () => {
         description: description.trim(),
         amount: totalParsed.toFixed(2),
         date: selectedDate.toISOString(),
+        categoryId: selectedCategoryId || undefined,
         splits,
       });
-      navigation.goBack();
+      navigation.navigate('GroupDetail', { groupId, refreshTimestamp: Date.now() });
     } catch (e: any) {
       const msg = e.response?.data?.message || 'Error al agregar el gasto al grupo';
       Alert.alert('Error', Array.isArray(msg) ? msg[0] : msg);
@@ -184,6 +213,43 @@ export const AddGroupExpenseScreen: React.FC = () => {
             />
           </View>
         </View>
+
+        {/* Category selector */}
+        {categories.length > 0 && (
+          <View style={cardStyle}>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>
+              Categoría
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {categories.map((cat, idx) => {
+                const catColor = getCategoryColor(cat.icon, idx);
+                const isSelected = selectedCategoryId === cat.id;
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    onPress={() => setSelectedCategoryId(cat.id)}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 7,
+                      borderRadius: 10,
+                      borderWidth: 1.5,
+                      borderColor: isSelected ? catColor : `${catColor}30`,
+                      backgroundColor: isSelected ? `${catColor}18` : colors.bgInput,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: catColor }} />
+                    <Text style={{ fontFamily: isSelected ? 'Inter_600SemiBold' : 'Inter_400Regular', fontSize: 13, color: isSelected ? catColor : colors.textSecondary }}>
+                      {cat.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
 
         {/* Date + Time */}
         <View style={cardStyle}>

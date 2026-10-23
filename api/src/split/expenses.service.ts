@@ -106,6 +106,15 @@ export class ExpensesService {
       }));
     }
 
+    // Resolver categoría (la elegida o 'Otros' global por defecto)
+    let categoryId = dto.categoryId;
+    if (!categoryId) {
+      const otrosCategory = await this.prisma.category.findFirst({
+        where: { name: 'Otros', userId: null },
+      });
+      categoryId = otrosCategory?.id;
+    }
+
     // Crear el gasto y todos los splits en una transacción atómica
     return this.prisma.$transaction(async (tx) => {
       const expense = await tx.groupExpense.create({
@@ -115,13 +124,37 @@ export class ExpensesService {
           description: dto.description,
           amount:      dto.amount,
           date:        dto.date ? new Date(dto.date) : new Date(),
-          splits: { create: splitsData },
+          categoryId:  categoryId || null,
+          // El split del propio pagador nace saldado (no se debe a sí mismo)
+          splits: {
+            create: splitsData.map((s) => ({ ...s, isPaid: s.userId === userId })),
+          },
         },
         include: {
           paidBy: { select: { id: true, name: true } },
           splits: { include: { user: { select: { id: true, name: true } } } },
         },
       });
+
+      // Crear transacción personal para el pagador por su parte proporcional
+      const payerSplit = expense.splits.find((s) => s.userId === userId);
+      if (payerSplit && categoryId) {
+        const txPersonal = await tx.transaction.create({
+          data: {
+            userId,
+            amount: payerSplit.amountOwed,
+            type: 'EXPENSE',
+            categoryId,
+            description: `${dto.description} (${group.name})`,
+            date: dto.date ? new Date(dto.date) : new Date(),
+          },
+        });
+
+        await tx.expenseSplit.update({
+          where: { id: payerSplit.id },
+          data: { transactionId: txPersonal.id },
+        });
+      }
 
       // Crear notificaciones para el resto del grupo (dentro de la misma transacción)
       const formattedAmount = totalAmount.toLocaleString('es-AR', {
@@ -151,6 +184,7 @@ export class ExpensesService {
 
     const expense = await this.prisma.groupExpense.findUnique({
       where: { id: expenseId },
+      include: { splits: true },
     });
     if (!expense) throw new NotFoundException('Gasto no encontrado');
     if (expense.groupId !== groupId) throw new BadRequestException('El gasto no pertenece a este grupo');
@@ -160,9 +194,101 @@ export class ExpensesService {
       throw new ForbiddenException('Solo quien registró el gasto puede eliminarlo');
     }
 
-    // onDelete: Cascade en ExpenseSplit elimina los splits automáticamente
-    await this.prisma.groupExpense.delete({ where: { id: expenseId } });
+    const txIds = expense.splits
+      .map((s) => s.transactionId)
+      .filter((id): id is string => Boolean(id));
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.groupExpense.delete({ where: { id: expenseId } });
+
+      if (txIds.length > 0) {
+        await tx.transaction.deleteMany({
+          where: { id: { in: txIds } },
+        });
+      }
+    });
+
     return { message: 'Gasto eliminado' };
+  }
+
+  // ── Marcar split como pagado / pendiente ────────────────────────────────────
+
+  async toggleSplitPaid(userId: string, groupId: string, expenseId: string, splitId: string) {
+    await this.assertMember(userId, groupId);
+
+    const split = await this.prisma.expenseSplit.findUnique({
+      where: { id: splitId },
+      include: {
+        groupExpense: { include: { group: { select: { name: true } } } },
+        user: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    if (!split || split.groupExpenseId !== expenseId || split.groupExpense.groupId !== groupId) {
+      throw new NotFoundException('Gasto o división no encontrada en este grupo');
+    }
+
+    const isPayer = split.groupExpense.paidById === userId;
+    const isDebtor = split.userId === userId;
+
+    // La parte del propio pagador está saldada por defecto y no se puede modificar
+    if (split.userId === split.groupExpense.paidById) {
+      throw new BadRequestException('El pagador no le debe nada a nadie en su propio gasto');
+    }
+
+    // Solo el deudor ("ya pagué") o quien pagó el gasto ("me pagaron") pueden cambiarlo.
+    // Ni el admin ni terceros pueden tocarlo.
+    if (!isPayer && !isDebtor) {
+      throw new ForbiddenException('Solo el deudor o quien cargó el gasto pueden cambiar este pago');
+    }
+
+    const willBePaid = !split.isPaid;
+
+    return this.prisma.$transaction(async (tx) => {
+      let transactionId = split.transactionId;
+
+      if (willBePaid) {
+        // Al marcar como pagado, generar la transacción personal para el deudor
+        let categoryId = split.groupExpense.categoryId;
+        if (!categoryId) {
+          const otrosCat = await tx.category.findFirst({
+            where: { name: 'Otros', userId: null },
+          });
+          categoryId = otrosCat?.id ?? null;
+        }
+
+        if (categoryId) {
+          const personalTx = await tx.transaction.create({
+            data: {
+              userId: split.userId,
+              amount: split.amountOwed,
+              type: 'EXPENSE',
+              categoryId,
+              description: `${split.groupExpense.description} (${split.groupExpense.group.name})`,
+              date: new Date(),
+            },
+          });
+          transactionId = personalTx.id;
+        }
+      } else {
+        // Si se desmarca como pagado, eliminar la transacción personal si existía
+        if (transactionId) {
+          await tx.transaction.delete({ where: { id: transactionId } });
+          transactionId = null;
+        }
+      }
+
+      const updated = await tx.expenseSplit.update({
+        where: { id: splitId },
+        data: {
+          isPaid: willBePaid,
+          transactionId,
+        },
+        include: { user: { select: { id: true, name: true, email: true } } },
+      });
+
+      return updated;
+    });
   }
 
   // ── Helper ──────────────────────────────────────────────────────────────────

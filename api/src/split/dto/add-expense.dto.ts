@@ -34,6 +34,10 @@ export class AddExpenseDto {
   @IsDateString()
   date?: string;
 
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string;
+
   /**
    * splits: define cuánto le toca a cada miembro.
    * - Si se manda → división personalizada.

@@ -16,8 +16,10 @@ import {
   FileText,
   LogOut,
   ChevronRight,
+  Trash2,
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
+import apiClient from '../../api/client';
 
 const Toggle = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
   <TouchableOpacity
@@ -90,6 +92,47 @@ export const SettingsScreen = () => {
     } finally {
       setBioLoading(false);
     }
+  };
+
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Eliminar cuenta',
+      '¿Estás seguro de que querés eliminar tu cuenta? Esta acción es definitiva y borrará todos tus datos, gastos y registros asociados.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Continuar',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Confirmación final',
+              'Esta acción NO se puede deshacer. ¿Realmente querés eliminar tu cuenta de forma permanente?',
+              [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                  text: 'Sí, eliminar mi cuenta',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setDeletingAccount(true);
+                    try {
+                      await apiClient.delete('/users/me');
+                      await logout();
+                    } catch (e: any) {
+                      const msg = e.response?.data?.message || 'Error al eliminar la cuenta';
+                      Alert.alert('Error', Array.isArray(msg) ? msg[0] : msg);
+                    } finally {
+                      setDeletingAccount(false);
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
   };
 
   const SectionTitle = ({ label }: { label: string }) => (
@@ -204,12 +247,19 @@ export const SettingsScreen = () => {
         {/* Danger */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 24 }}>
           <View style={cardStyle}>
-            <Row icon={LogOut} label="Cerrar sesión" danger border={false} onPress={logout} />
+            <Row icon={LogOut} label="Cerrar sesión" danger border onPress={logout} />
+            <Row
+              icon={Trash2}
+              label={deletingAccount ? 'Eliminando cuenta...' : 'Eliminar cuenta'}
+              danger
+              border={false}
+              onPress={deletingAccount ? undefined : handleDeleteAccount}
+            />
           </View>
         </View>
 
         <Text style={{ textAlign: 'center', fontFamily: 'Inter_400Regular', fontSize: 11, color: colors.textMuted, marginBottom: 16 }}>
-          Finova v1.0.0 · Hecho con ❤️ en Argentina
+          Finova v1.0.0
         </Text>
       </ScrollView>
 

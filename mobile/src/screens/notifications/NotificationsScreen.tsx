@@ -101,12 +101,13 @@ export const NotificationsScreen = ({ onUnreadChange }: Props) => {
       onUnreadChange?.(Math.max(0, unreadCount - 1));
       apiClient.patch(`/notifications/${n.id}/read`).catch((e) => console.error(e));
     }
-    // Invitación pendiente o rechazada: no hay grupo al que entrar todavía
-    if (n.type === 'GROUP_INVITE' && n.inviteStatus !== 'ACCEPTED') return;
+    // Invitación pendiente o rechazada propia: no hay grupo al que entrar todavía (a menos que sea sugerencia de miembro)
+    const isSuggestion = n.title.toLowerCase().includes('sugerencia');
+    if (n.type === 'GROUP_INVITE' && n.inviteStatus === 'PENDING' && !isSuggestion) return;
     if (n.relatedId) {
       navigation.navigate('Grupos', {
         screen: 'GroupDetail',
-        params: { groupId: n.relatedId },
+        params: { groupId: n.relatedId, refreshTimestamp: Date.now() },
       });
     }
   };
