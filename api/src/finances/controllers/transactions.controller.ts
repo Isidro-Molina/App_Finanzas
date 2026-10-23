@@ -13,6 +13,7 @@ import {
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { TransactionsService } from '../transactions.service';
 import { CreateTransactionDto } from '../dto/create-transaction.dto';
+import { UpdateTransactionDto } from '../dto/update-transaction.dto';
 import { TransactionQueryDto } from '../dto/transaction-query.dto';
 
 @UseGuards(JwtAuthGuard)
@@ -48,8 +49,18 @@ export class TransactionsController {
     return this.transactionsService.getSummary(
       req.user.userId,
       query.month ?? now.getMonth() + 1,
-      query.year  ?? now.getFullYear(),
+      query.year ?? now.getFullYear(),
     );
+  }
+
+  /**
+   * GET /api/v1/transactions/export-csv
+   * Exporta todas las transacciones del usuario en formato CSV
+   */
+  @Get('export-csv')
+  async exportCsv(@Request() req: { user: { userId: string } }) {
+    const csv = await this.transactionsService.exportCsv(req.user.userId);
+    return { csv };
   }
 
   /** POST /api/v1/transactions */
@@ -66,7 +77,7 @@ export class TransactionsController {
   update(
     @Request() req: { user: { userId: string } },
     @Param('id') id: string,
-    @Body() dto: Partial<CreateTransactionDto>,
+    @Body() dto: UpdateTransactionDto,
   ) {
     return this.transactionsService.update(req.user.userId, id, dto);
   }

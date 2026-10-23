@@ -16,6 +16,16 @@ export class MailService {
     });
   }
 
+  private escapeHtml(text: string): string {
+    if (!text) return '';
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   /**
    * Envía un email de invitación a un grupo.
    * Si el usuario ya tiene cuenta → invitación directa.
@@ -32,13 +42,22 @@ export class MailService {
     groupName: string;
     userExists: boolean;
   }): Promise<void> {
+    const safeInviter = this.escapeHtml(inviterName);
+    const safeGroup = this.escapeHtml(groupName);
+
     const subject = userExists
       ? `${inviterName} te invitó al grupo "${groupName}" en Finova`
       : `${inviterName} te invita a unirte a "${groupName}" en Finova`;
 
     const html = userExists
-      ? this.templateExistingUser({ inviterName, groupName })
-      : this.templateNewUser({ inviterName, groupName });
+      ? this.templateExistingUser({
+          inviterName: safeInviter,
+          groupName: safeGroup,
+        })
+      : this.templateNewUser({
+          inviterName: safeInviter,
+          groupName: safeGroup,
+        });
 
     try {
       await this.transporter.sendMail({
@@ -48,9 +67,10 @@ export class MailService {
         html,
       });
       this.logger.log(`Email de invitación enviado a ${toEmail}`);
-    } catch (error) {
+    } catch (error: unknown) {
       // No interrumpimos el flujo si el email falla — el usuario igual queda en el grupo
-      this.logger.error(`Error enviando email a ${toEmail}: ${error.message}`);
+      const errMsg = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Error enviando email a ${toEmail}: ${errMsg}`);
     }
   }
 
@@ -64,6 +84,7 @@ export class MailService {
     name: string;
     code: string;
   }): Promise<void> {
+    const safeName = this.escapeHtml(name);
     const html = `
       <!DOCTYPE html>
       <html lang="es">
@@ -79,7 +100,7 @@ export class MailService {
               <tr><td style="padding:36px 40px;">
                 <h2 style="margin:0 0 8px;font-size:22px;color:#111827;font-weight:700;">Restablecer contraseña 🔐</h2>
                 <p style="color:#6B7280;font-size:15px;line-height:1.6;margin:0 0 24px;">
-                  Hola <strong style="color:#111827;">${name}</strong>, usá este código para elegir una nueva contraseña. Vence en 15 minutos.
+                  Hola <strong style="color:#111827;">${safeName}</strong>, usá este código para elegir una nueva contraseña. Vence en 15 minutos.
                 </p>
                 <div style="background:#EFF6FF;border-radius:12px;padding:20px;text-align:center;margin-bottom:24px;">
                   <span style="font-size:36px;font-weight:800;letter-spacing:10px;color:#1D4ED8;">${code}</span>
@@ -101,8 +122,11 @@ export class MailService {
         html,
       });
       this.logger.log(`Código de recuperación enviado a ${toEmail}`);
-    } catch (error) {
-      this.logger.error(`Error enviando código de recuperación a ${toEmail}: ${error.message}`);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Error enviando código de recuperación a ${toEmail}: ${errMsg}`,
+      );
     }
   }
 

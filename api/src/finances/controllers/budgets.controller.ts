@@ -47,7 +47,7 @@ export class BudgetsController {
     return this.budgetsService.findAll(
       req.user.userId,
       query.month ?? now.getMonth() + 1,
-      query.year  ?? now.getFullYear(),
+      query.year ?? now.getFullYear(),
     );
   }
 

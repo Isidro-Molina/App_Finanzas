@@ -13,6 +13,7 @@ import {
 import { Plus, Trash2, X } from 'lucide-react-native';
 import apiClient from '../api/client';
 import { useTheme } from '../context/ThemeContext';
+import { formatCurrency } from '../utils/currency';
 
 export interface BudgetItem {
   id: string;
@@ -138,10 +139,10 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
                 <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: colors.textMuted }}>
-                  ${b.spent.toLocaleString('es-AR')} de ${b.amount.toLocaleString('es-AR')}
+                  {formatCurrency(b.spent)} de {formatCurrency(b.amount)}
                 </Text>
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: over ? '#EF4444' : colors.textSecondary }}>
-                  {over ? `Excedido $${Math.abs(b.remaining).toLocaleString('es-AR')}` : `Disponible $${b.remaining.toLocaleString('es-AR')}`}
+                  {over ? `Excedido ${formatCurrency(Math.abs(b.remaining))}` : `Disponible ${formatCurrency(b.remaining)}`}
                 </Text>
               </View>
             </View>

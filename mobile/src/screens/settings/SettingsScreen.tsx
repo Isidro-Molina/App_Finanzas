@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import {
@@ -20,6 +20,8 @@ import {
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import apiClient from '../../api/client';
+import { Paths, File } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 const Toggle = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
   <TouchableOpacity
@@ -57,40 +59,23 @@ export const SettingsScreen = () => {
   const navigation = useNavigation<any>();
   const [notifications, setNotifications] = useState(true);
 
-  const [showBioModal, setShowBioModal] = useState(false);
-  const [bioPassword, setBioPassword] = useState('');
-  const [bioLoading, setBioLoading] = useState(false);
-  
   const handleToggleBiometric = async () => {
     if (biometricEnabled) {
       await disableBiometric();
+      Alert.alert('Desactivado', 'El acceso biométrico fue desactivado.');
     } else {
       const available = await isBiometricAvailable();
       if (!available) {
-        Alert.alert('No disponible', 'Tu dispositivo no soporta o no tiene configurada la autenticación biométrica (Face ID / Huella).');
+        Alert.alert(
+          'No disponible',
+          'Tu dispositivo no soporta o no tiene configurada la autenticación biométrica (Face ID / Huella).',
+        );
         return;
       }
-      setShowBioModal(true);
-    }
-  };
-
-  const confirmEnableBiometric = async () => {
-    if (!bioPassword) {
-      Alert.alert('Error', 'Ingresá tu contraseña para habilitar esta función.');
-      return;
-    }
-    setBioLoading(true);
-    try {
-      // In a real app, you might want to verify the password against the API first,
-      // but the AuthContext will just store it for future logins. 
-      await enableBiometric(user?.email || '', bioPassword);
-      setShowBioModal(false);
-      setBioPassword('');
-      Alert.alert('¡Listo!', 'El inicio de sesión biométrico fue activado.');
-    } catch (error) {
-      Alert.alert('Error', 'No se pudo activar la biometría.');
-    } finally {
-      setBioLoading(false);
+      const success = await enableBiometric();
+      if (success) {
+        Alert.alert('¡Listo!', 'El inicio de sesión biométrico fue activado.');
+      }
     }
   };
 
@@ -132,6 +117,65 @@ export const SettingsScreen = () => {
           },
         },
       ]
+    );
+  };
+
+  const [exportingCsv, setExportingCsv] = useState(false);
+
+  const handleExportCsv = async () => {
+    setExportingCsv(true);
+    try {
+      const res = await apiClient.get('/transactions/export-csv');
+      const csvData = res.data.csv;
+      if (!csvData) {
+        Alert.alert('Sin datos', 'No tenés transacciones registradas para exportar.');
+        return;
+      }
+
+      const file = new File(Paths.document, 'finanzas_transacciones.csv');
+      if (file.exists) {
+        file.delete();
+      }
+      file.create();
+      file.write(csvData);
+
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(file.uri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Exportar transacciones',
+          UTI: 'public.comma-separated-values-text',
+        });
+      } else {
+        Alert.alert('Éxito', `Archivo guardado en: ${file.uri}`);
+      }
+    } catch (e: any) {
+      const msg = e.response?.data?.message || 'Error al exportar los datos';
+      Alert.alert('Error', Array.isArray(msg) ? msg[0] : msg);
+    } finally {
+      setExportingCsv(false);
+    }
+  };
+
+  const handleHelpCenter = () => {
+    Alert.alert(
+      'Centro de Ayuda',
+      'Finova te permite gestionar tus finanzas personales y dividir gastos en grupos de forma colaborativa.\n\n• Finanzas: Gestioná tus ingresos, gastos y límites mensuales por categoría.\n• Grupos: Creá grupos, cargá gastos compartidos y liquidá deudas fácilmente.\n\n¿Tenés consultas? Escribinos a soporte@finova.app'
+    );
+  };
+
+  const handleRateApp = () => {
+    Alert.alert(
+      'Calificar Finova',
+      '¡Gracias por usar Finova! Si te gusta la app, dejanos tus 5 estrellas en la tienda.',
+      [{ text: '¡Claro que sí!' }]
+    );
+  };
+
+  const handleTerms = () => {
+    Alert.alert(
+      'Términos y Privacidad',
+      'Finova protege tu privacidad y tus datos financieros.\n\n• Tus datos son confidenciales y están cifrados.\n• No compartimos información con terceros.\n• Podés eliminar tu cuenta y tus datos en cualquier momento desde esta pantalla.'
     );
   };
 
@@ -227,10 +271,15 @@ export const SettingsScreen = () => {
 
         {/* Categorías */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
-          <SectionTitle label="Categorías" />
+          <SectionTitle label="Categorías y Datos" />
           <View style={cardStyle}>
             <Row icon={Tag} label="Gestionar categorías" onPress={() => navigation.navigate('ManageCategories')} />
-            <Row icon={BarChart2} label="Exportar datos (CSV)" border={false} />
+            <Row
+              icon={BarChart2}
+              label={exportingCsv ? 'Exportando...' : 'Exportar datos (CSV)'}
+              border={false}
+              onPress={exportingCsv ? undefined : handleExportCsv}
+            />
           </View>
         </View>
 
@@ -238,9 +287,9 @@ export const SettingsScreen = () => {
         <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
           <SectionTitle label="Soporte" />
           <View style={cardStyle}>
-            <Row icon={HelpCircle} label="Centro de ayuda" />
-            <Row icon={Star} label="Calificar la app" />
-            <Row icon={FileText} label="Términos y privacidad" border={false} />
+            <Row icon={HelpCircle} label="Centro de ayuda" onPress={handleHelpCenter} />
+            <Row icon={Star} label="Calificar la app" onPress={handleRateApp} />
+            <Row icon={FileText} label="Términos y privacidad" border={false} onPress={handleTerms} />
           </View>
         </View>
 
@@ -262,60 +311,6 @@ export const SettingsScreen = () => {
           Finova v1.0.0
         </Text>
       </ScrollView>
-
-      {/* Password prompt for biometric */}
-      <Modal visible={showBioModal} transparent animationType="fade" onRequestClose={() => setShowBioModal(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 24 }}>
-          <View style={{ backgroundColor: colors.bgCard, borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 10 }}>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: colors.textPrimary, marginBottom: 8 }}>
-              Habilitar Face ID / Huella
-            </Text>
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textMuted, marginBottom: 20 }}>
-              Por seguridad, ingresá tu contraseña actual para autorizar el inicio de sesión biométrico.
-            </Text>
-            
-            <TextInput
-              value={bioPassword}
-              onChangeText={setBioPassword}
-              placeholder="Tu contraseña"
-              placeholderTextColor={colors.textMuted}
-              secureTextEntry
-              autoFocus
-              style={{
-                borderWidth: 1.5,
-                borderColor: colors.border,
-                borderRadius: 14,
-                paddingHorizontal: 16,
-                paddingVertical: 14,
-                fontSize: 15,
-                fontFamily: 'Inter_500Medium',
-                color: colors.textPrimary,
-                marginBottom: 24,
-                backgroundColor: colors.bgInput,
-              }}
-            />
-
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <TouchableOpacity
-                onPress={() => { setShowBioModal(false); setBioPassword(''); }}
-                style={{ flex: 1, paddingVertical: 14, backgroundColor: colors.bgSubtle, borderRadius: 12, alignItems: 'center' }}
-              >
-                <Text style={{ fontFamily: 'Inter_600SemiBold', color: colors.textSecondary }}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={confirmEnableBiometric}
-                disabled={bioLoading}
-                style={{ flex: 1, paddingVertical: 14, backgroundColor: colors.brand, borderRadius: 12, alignItems: 'center' }}
-              >
-                {bioLoading
-                  ? <ActivityIndicator color="#fff" />
-                  : <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#fff' }}>Confirmar</Text>
-                }
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };

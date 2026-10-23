@@ -27,13 +27,19 @@ export class NotificationsService {
       where: { userId, groupId: { in: groupIds } },
       select: { groupId: true, status: true },
     });
-    const statusByGroup = new Map(memberships.map((m) => [m.groupId, m.status]));
+    const statusByGroup = new Map(
+      memberships.map((m) => [m.groupId, m.status]),
+    );
 
     return notifications.map((n) => {
       if (n.type !== 'GROUP_INVITE' || !n.relatedId) return n;
       const status = statusByGroup.get(n.relatedId);
       const inviteStatus =
-        status === 'PENDING' ? 'PENDING' : status === 'ACTIVE' ? 'ACCEPTED' : 'DECLINED';
+        status === 'PENDING'
+          ? 'PENDING'
+          : status === 'ACTIVE'
+            ? 'ACCEPTED'
+            : 'DECLINED';
       return { ...n, inviteStatus };
     });
   }
@@ -41,7 +47,12 @@ export class NotificationsService {
   /** Marca como leídas las notificaciones de invitación de un grupo */
   markInviteRead(userId: string, groupId: string) {
     return this.prisma.notification.updateMany({
-      where: { userId, type: 'GROUP_INVITE', relatedId: groupId, isRead: false },
+      where: {
+        userId,
+        type: 'GROUP_INVITE',
+        relatedId: groupId,
+        isRead: false,
+      },
       data: { isRead: true },
     });
   }
@@ -95,5 +106,27 @@ export class NotificationsService {
       where: { userId, isRead: false },
       data: { isRead: true },
     });
+  }
+
+  async remove(userId: string, id: string) {
+    const notification = await this.prisma.notification.findUnique({
+      where: { id },
+    });
+
+    if (!notification || notification.userId !== userId) {
+      throw new NotFoundException('Notificación no encontrada');
+    }
+
+    await this.prisma.notification.delete({ where: { id } });
+    return { message: 'Notificación eliminada' };
+  }
+
+  async removeAll(userId: string, onlyRead = false) {
+    const where: Prisma.NotificationWhereInput = { userId };
+    if (onlyRead) {
+      where.isRead = true;
+    }
+    const result = await this.prisma.notification.deleteMany({ where });
+    return { message: `${result.count} notificaciones eliminadas` };
   }
 }

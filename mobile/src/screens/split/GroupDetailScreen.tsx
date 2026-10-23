@@ -38,6 +38,7 @@ import {
 } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { formatCurrency } from '../../utils/currency';
 
 interface Member {
   userId: string;
@@ -51,6 +52,7 @@ interface GroupDetail {
   description?: string | null;
   icon?: string | null;
   isSettled: boolean;
+  strictPayments?: boolean;
   members: Member[];
   createdBy: { id?: string; name: string; email?: string };
 }
@@ -112,6 +114,7 @@ export const GroupDetailScreen = () => {
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [editIcon, setEditIcon] = useState<string | null>(null);
+  const [editStrictPayments, setEditStrictPayments] = useState(false);
   const [savingGroup, setSavingGroup] = useState(false);
 
   // Modal detalle de gasto
@@ -163,6 +166,7 @@ export const GroupDetailScreen = () => {
     setEditName(group.name);
     setEditDesc(group.description || '');
     setEditIcon(group.icon || null);
+    setEditStrictPayments(group.strictPayments ?? false);
     setIsEditGroupOpen(true);
   };
 
@@ -201,6 +205,7 @@ export const GroupDetailScreen = () => {
         name: editName.trim(),
         description: editDesc.trim() || null,
         icon: editIcon || null,
+        strictPayments: editStrictPayments,
       });
       setIsEditGroupOpen(false);
       fetchData(true);
@@ -570,7 +575,7 @@ export const GroupDetailScreen = () => {
                         {exp.description}
                       </Text>
                       <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: colors.brand }}>
-                        ${Number(exp.amount).toLocaleString('es-AR')}
+                        {formatCurrency(exp.amount)}
                       </Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -627,7 +632,7 @@ export const GroupDetailScreen = () => {
                       <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>Le debe transferir</Text>
                     </View>
                     <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: colors.textPrimary }}>
-                      ${tx.amount.toLocaleString('es-AR')}
+                      {formatCurrency(tx.amount)}
                     </Text>
                   </View>
                 ))}
@@ -649,7 +654,7 @@ export const GroupDetailScreen = () => {
                   <View key={b.userId} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: i < (balance.balances.length - 1) ? 1 : 0, borderBottomColor: colors.borderSubtle }}>
                     <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: colors.textPrimary }}>{b.name}</Text>
                     <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, color: isZero ? colors.textMuted : isPositive ? colors.income : colors.expense }}>
-                      {isZero ? 'Saldado' : isPositive ? `Le deben +$${b.net.toLocaleString('es-AR')}` : `Debe -$${Math.abs(b.net).toLocaleString('es-AR')}`}
+                      {isZero ? 'Saldado' : isPositive ? `Le deben +${formatCurrency(b.net)}` : `Debe -${formatCurrency(Math.abs(b.net))}`}
                     </Text>
                   </View>
                 );
@@ -767,6 +772,52 @@ export const GroupDetailScreen = () => {
               style={{ borderWidth: 1.5, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, fontFamily: 'Inter_400Regular', color: colors.textPrimary, backgroundColor: colors.bgInput, marginBottom: 20, height: 70, textAlignVertical: 'top' }}
             />
 
+            {/* Modo de confirmación de pagos */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: colors.bgInput,
+                borderRadius: 14,
+                padding: 14,
+                marginBottom: 20,
+                borderWidth: 1,
+                borderColor: colors.borderSubtle,
+              }}
+            >
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.textPrimary, marginBottom: 2 }}>
+                  Solo quien pagó confirma cobros
+                </Text>
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: colors.textMuted }}>
+                  Los participantes no podrán marcarse como pagados por su cuenta.
+                </Text>
+              </View>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => setEditStrictPayments((prev) => !prev)}
+                style={{
+                  width: 44,
+                  height: 24,
+                  borderRadius: 12,
+                  backgroundColor: editStrictPayments ? colors.brand : (isDark ? '#475569' : '#CBD5E1'),
+                  justifyContent: 'center',
+                }}
+              >
+                <View
+                  style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: 9,
+                    backgroundColor: '#fff',
+                    position: 'absolute',
+                    left: editStrictPayments ? 23 : 3,
+                  }}
+                />
+              </TouchableOpacity>
+            </View>
+
             <TouchableOpacity onPress={handleSaveGroup} disabled={savingGroup} style={{ width: '100%', paddingVertical: 14, backgroundColor: colors.brand, borderRadius: 14, alignItems: 'center' }}>
               {savingGroup ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#fff', fontSize: 15 }}>Guardar cambios</Text>}
             </TouchableOpacity>
@@ -806,7 +857,7 @@ export const GroupDetailScreen = () => {
                   <View>
                     <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>Monto total</Text>
                     <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: colors.brand }}>
-                      ${Number(selectedExpense.amount).toLocaleString('es-AR')}
+                      {formatCurrency(selectedExpense.amount)}
                     </Text>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
@@ -828,8 +879,10 @@ export const GroupDetailScreen = () => {
                     // La parte del pagador nace saldada y no se toca.
                     // Solo el deudor ("ya pagué") o quien cargó el gasto ("me pagaron") pueden cambiarla.
                     const isSplitPayer = split.userId === selectedExpense.paidBy.id;
+                    const isStrict = group?.strictPayments ?? false;
+                    const isPayerOfExpense = selectedExpense.paidBy.id === user?.id;
                     const canToggle =
-                      !isSplitPayer && (isSplitMe || selectedExpense.paidBy.id === user?.id);
+                      !isSplitPayer && (isStrict ? isPayerOfExpense : (isSplitMe || isPayerOfExpense));
 
                     return (
                       <View
@@ -853,7 +906,7 @@ export const GroupDetailScreen = () => {
                             </Text>
                           </View>
                           <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
-                            Le corresponde: ${Number(split.amountOwed).toLocaleString('es-AR')}
+                            Le corresponde: {formatCurrency(split.amountOwed)}
                           </Text>
                         </View>
 
@@ -883,7 +936,7 @@ export const GroupDetailScreen = () => {
                           </View>
 
                           {/* Botón para alternar si tiene permisos */}
-                          {canToggle && (
+                          {canToggle ? (
                             <TouchableOpacity
                               onPress={() => handleToggleSplit(split.id)}
                               disabled={togglingSplitId === split.id}
@@ -897,6 +950,12 @@ export const GroupDetailScreen = () => {
                                 </Text>
                               )}
                             </TouchableOpacity>
+                          ) : (
+                            isStrict && !split.isPaid && isSplitMe && (
+                              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 10, color: colors.textMuted }}>
+                                Confirma {selectedExpense.paidBy.name}
+                              </Text>
+                            )
                           )}
                         </View>
                       </View>

@@ -12,10 +12,6 @@ import { BudgetsController } from './controllers/budgets.controller';
     TransactionsController,
     BudgetsController,
   ],
-  providers: [
-    CategoriesService,
-    TransactionsService,
-    BudgetsService,
-  ],
+  providers: [CategoriesService, TransactionsService, BudgetsService],
 })
 export class FinancesModule {}

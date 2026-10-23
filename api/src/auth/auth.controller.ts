@@ -8,6 +8,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -25,6 +26,7 @@ export class AuthController {
    * Crea una cuenta nueva y devuelve un JWT listo para usar.
    * Body: { name, email, password }
    */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('register')
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
@@ -36,6 +38,7 @@ export class AuthController {
    * Body: { email, password }
    * Responde 200 (no 201) porque no crea un recurso nuevo.
    */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   login(@Body() dto: LoginDto) {
@@ -59,6 +62,7 @@ export class AuthController {
    * Envía un código de 6 dígitos al email (si existe la cuenta).
    * Body: { email }
    */
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   forgotPassword(@Body() dto: ForgotPasswordDto) {

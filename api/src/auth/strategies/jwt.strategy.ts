@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 // El payload que firmamos al generar el JWT
 export interface JwtPayload {
-  sub: string;  // userId
+  sub: string; // userId
   email: string;
 }
 
@@ -13,11 +14,12 @@ export interface JwtPayload {
  *
  * Passport extrae el token del header:  Authorization: Bearer <token>
  * Verifica la firma con JWT_SECRET y llama a validate() con el payload.
+ * Valida que el usuario aún exista en la base de datos para evitar tokens huérfanos.
  * El valor retornado por validate() se adjunta a request.user.
  */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
+  constructor(private prisma: PrismaService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -26,7 +28,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   // Lo que retornemos acá queda en request.user
-  validate(payload: JwtPayload) {
-    return { userId: payload.sub, email: payload.email };
+  async validate(payload: JwtPayload) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { id: true, email: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Usuario no válido o inexistente');
+    }
+
+    return { userId: user.id, email: user.email };
   }
 }

@@ -36,8 +36,14 @@ export const LoginScreen = () => {
   const redirectUri = AuthSession.makeRedirectUri();
 
   const [request, response, promptAsync] = Google.useAuthRequest({
+    iosClientId: GOOGLE_IOS_CLIENT_ID,
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
     webClientId: GOOGLE_WEB_CLIENT_ID,
-    clientId: GOOGLE_WEB_CLIENT_ID,
+    clientId: Platform.select({
+      ios: GOOGLE_IOS_CLIENT_ID || GOOGLE_WEB_CLIENT_ID,
+      android: GOOGLE_ANDROID_CLIENT_ID || GOOGLE_WEB_CLIENT_ID,
+      default: GOOGLE_WEB_CLIENT_ID,
+    }),
     redirectUri,
   });
 

@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  UnauthorizedException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -7,6 +13,52 @@ import * as bcrypt from 'bcrypt';
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
+
+  /**
+   * Busca el perfil público de un usuario.
+   * Solo permite ver perfiles propios o de usuarios con quienes se comparte un grupo activo.
+   */
+  async findPublicProfile(requesterId: string, targetId: string) {
+    if (requesterId === targetId) {
+      return this.findById(requesterId);
+    }
+
+    const sharedGroup = await this.prisma.groupMember.findFirst({
+      where: {
+        userId: requesterId,
+        status: 'ACTIVE',
+        group: {
+          members: {
+            some: {
+              userId: targetId,
+              status: 'ACTIVE',
+            },
+          },
+        },
+      },
+    });
+
+    if (!sharedGroup) {
+      throw new ForbiddenException(
+        'No tenés permiso para ver el perfil de este usuario',
+      );
+    }
+
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: targetId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    });
+
+    if (!targetUser) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    return targetUser;
+  }
 
   /**
    * Busca un usuario por su ID.
@@ -83,10 +135,14 @@ export class UsersService {
     if (!user) throw new NotFoundException('Usuario no encontrado');
 
     const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
-    if (!valid) throw new UnauthorizedException('La contraseña actual es incorrecta');
+    if (!valid)
+      throw new UnauthorizedException('La contraseña actual es incorrecta');
 
     const newHash = await bcrypt.hash(dto.newPassword, 12);
-    await this.prisma.user.update({ where: { id }, data: { passwordHash: newHash } });
+    await this.prisma.user.update({
+      where: { id },
+      data: { passwordHash: newHash },
+    });
     return { message: 'Contraseña actualizada correctamente' };
   }
 
@@ -113,33 +169,59 @@ export class UsersService {
       // 4. Si el usuario creó grupos vacíos o es creador, reasignar creador o eliminar grupos sin miembros
       const createdGroups = await tx.group.findMany({
         where: { createdById: id },
-        include: { members: true },
+        include: {
+          members: {
+            where: {
+              userId: { not: id },
+              status: 'ACTIVE',
+            },
+          },
+        },
       });
 
       for (const group of createdGroups) {
         if (group.members.length === 0) {
-          // Si no tiene miembros, borrar gastos y el grupo
-          const expenses = await tx.groupExpense.findMany({ where: { groupId: group.id } });
+          // Si no tiene otros miembros activos, borrar gastos, miembros pendientes y el grupo
+          const expenses = await tx.groupExpense.findMany({
+            where: { groupId: group.id },
+          });
           const expenseIds = expenses.map((e) => e.id);
           if (expenseIds.length > 0) {
-            await tx.expenseSplit.deleteMany({ where: { groupExpenseId: { in: expenseIds } } });
+            await tx.expenseSplit.deleteMany({
+              where: { groupExpenseId: { in: expenseIds } },
+            });
             await tx.groupExpense.deleteMany({ where: { groupId: group.id } });
           }
+          await tx.groupMember.deleteMany({ where: { groupId: group.id } });
           await tx.group.delete({ where: { id: group.id } });
         } else {
-          // Reasignar al primer miembro activo como creador
+          // Reasignar al primer miembro activo como creador y asegurar rol ADMIN
+          const newOwnerId = group.members[0].userId;
           await tx.group.update({
             where: { id: group.id },
-            data: { createdById: group.members[0].userId },
+            data: { createdById: newOwnerId },
+          });
+          await tx.groupMember.update({
+            where: {
+              userId_groupId: {
+                userId: newOwnerId,
+                groupId: group.id,
+              },
+            },
+            data: { role: 'ADMIN' },
           });
         }
       }
 
       // 5. Gastos pagados en grupos por el usuario (splits asociados se eliminan en cascada)
-      const userExpenses = await tx.groupExpense.findMany({ where: { paidById: id } });
+      const userExpenses = await tx.groupExpense.findMany({
+        where: { paidById: id },
+      });
       const userExpenseIds = userExpenses.map((e) => e.id);
       if (userExpenseIds.length > 0) {
-        await tx.expenseSplit.deleteMany({ where: { groupExpenseId: { in: userExpenseIds } } });
+        await tx.expenseSplit.deleteMany({
+          where: { groupExpenseId: { in: userExpenseIds } },
+        });
         await tx.groupExpense.deleteMany({ where: { paidById: id } });
       }
 

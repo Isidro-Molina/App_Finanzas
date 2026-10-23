@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import Svg, { G, Path, Circle } from 'react-native-svg';
 import { useTheme } from '../context/ThemeContext';
+import { formatCurrency } from '../utils/currency';
 
 interface CategorySummary {
   name: string;
@@ -138,7 +139,7 @@ export const SpendingChart: React.FC<SpendingChartProps> = ({ categories, totalE
             alignItems: 'center', justifyContent: 'center',
           }}>
             <Text style={{ fontFamily: 'Outfit_800ExtraBold', fontSize: 13, color: colors.textPrimary }} numberOfLines={1}>
-              ${Math.round(totalExpense).toLocaleString('es-AR')}
+              {formatCurrency(totalExpense)}
             </Text>
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 9, color: colors.textMuted }}>
               total

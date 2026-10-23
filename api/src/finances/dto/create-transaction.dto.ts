@@ -1,6 +1,5 @@
 import {
   IsDateString,
-  IsDecimal,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -9,10 +8,11 @@ import {
   MaxLength,
 } from 'class-validator';
 import { TransactionType } from '@prisma/client';
+import { IsPositiveDecimal } from 'src/common/validators/is-positive-decimal.decorator';
 
 export class CreateTransactionDto {
-  @IsDecimal({ decimal_digits: '0,2' }, { message: 'El monto debe ser un número decimal válido' })
-  @IsNotEmpty()
+  @IsPositiveDecimal()
+  @IsNotEmpty({ message: 'El monto es requerido' })
   amount: string; // Llega como string, Prisma lo convierte a Decimal
 
   @IsEnum(TransactionType, { message: 'type debe ser INCOME o EXPENSE' })

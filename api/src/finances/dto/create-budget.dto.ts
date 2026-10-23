@@ -1,9 +1,10 @@
-import { IsDecimal, IsInt, IsNotEmpty, IsUUID, Max, Min } from 'class-validator';
+import { IsInt, IsNotEmpty, IsUUID, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
+import { IsPositiveDecimal } from 'src/common/validators/is-positive-decimal.decorator';
 
 export class CreateBudgetDto {
-  @IsDecimal({ decimal_digits: '0,2' }, { message: 'El monto debe ser un decimal válido' })
-  @IsNotEmpty()
+  @IsPositiveDecimal()
+  @IsNotEmpty({ message: 'El monto es requerido' })
   amount: string;
 
   @IsUUID()

@@ -10,8 +10,9 @@ yarn-debug.log*
 yarn-error.log*
 
 # ─── NestJS / TypeScript ────────────────────
-api/dist/
-api/build/
+dist/
+build/
+coverage/
 
 # ─── Prisma ─────────────────────────────────
 api/prisma/migrations/

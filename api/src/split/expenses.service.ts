@@ -15,8 +15,6 @@ export class ExpensesService {
     private notificationsService: NotificationsService,
   ) {}
 
-
-
   // ── Listar gastos del grupo ─────────────────────────────────────────────────
 
   async findAll(userId: string, groupId: string) {
@@ -87,22 +85,19 @@ export class ExpensesService {
       }
 
       splitsData = dto.splits.map((s) => ({
-        userId:    s.userId,
+        userId: s.userId,
         amountOwed: s.amount,
       }));
     } else {
       // ── División igualitaria ────────────────────────────────────────────────
-      const perPerson    = totalAmount / members.length;
-      const rounded      = Math.floor(perPerson * 100) / 100; // Piso de 2 decimales
-      const remainder    = +(totalAmount - rounded * members.length).toFixed(2);
+      const perPerson = totalAmount / members.length;
+      const rounded = Math.floor(perPerson * 100) / 100; // Piso de 2 decimales
+      const remainder = +(totalAmount - rounded * members.length).toFixed(2);
 
       splitsData = members.map((m, index) => ({
-        userId:    m.userId,
+        userId: m.userId,
         // El primer miembro absorbe el redondeo residual (ej: $10 / 3 = $3.33 + $3.33 + $3.34)
-        amountOwed: (index === 0
-          ? rounded + remainder
-          : rounded
-        ).toFixed(2),
+        amountOwed: (index === 0 ? rounded + remainder : rounded).toFixed(2),
       }));
     }
 
@@ -120,14 +115,17 @@ export class ExpensesService {
       const expense = await tx.groupExpense.create({
         data: {
           groupId,
-          paidById:    userId,
+          paidById: userId,
           description: dto.description,
-          amount:      dto.amount,
-          date:        dto.date ? new Date(dto.date) : new Date(),
-          categoryId:  categoryId || null,
+          amount: dto.amount,
+          date: dto.date ? new Date(dto.date) : new Date(),
+          categoryId: categoryId || null,
           // El split del propio pagador nace saldado (no se debe a sí mismo)
           splits: {
-            create: splitsData.map((s) => ({ ...s, isPaid: s.userId === userId })),
+            create: splitsData.map((s) => ({
+              ...s,
+              isPaid: s.userId === userId,
+            })),
           },
         },
         include: {
@@ -187,11 +185,14 @@ export class ExpensesService {
       include: { splits: true },
     });
     if (!expense) throw new NotFoundException('Gasto no encontrado');
-    if (expense.groupId !== groupId) throw new BadRequestException('El gasto no pertenece a este grupo');
+    if (expense.groupId !== groupId)
+      throw new BadRequestException('El gasto no pertenece a este grupo');
 
     // Solo quien pagó puede eliminar el gasto
     if (expense.paidById !== userId) {
-      throw new ForbiddenException('Solo quien registró el gasto puede eliminarlo');
+      throw new ForbiddenException(
+        'Solo quien registró el gasto puede eliminarlo',
+      );
     }
 
     const txIds = expense.splits
@@ -213,19 +214,32 @@ export class ExpensesService {
 
   // ── Marcar split como pagado / pendiente ────────────────────────────────────
 
-  async toggleSplitPaid(userId: string, groupId: string, expenseId: string, splitId: string) {
+  async toggleSplitPaid(
+    userId: string,
+    groupId: string,
+    expenseId: string,
+    splitId: string,
+  ) {
     await this.assertMember(userId, groupId);
 
     const split = await this.prisma.expenseSplit.findUnique({
       where: { id: splitId },
       include: {
-        groupExpense: { include: { group: { select: { name: true } } } },
+        groupExpense: {
+          include: { group: { select: { name: true, strictPayments: true } } },
+        },
         user: { select: { id: true, name: true, email: true } },
       },
     });
 
-    if (!split || split.groupExpenseId !== expenseId || split.groupExpense.groupId !== groupId) {
-      throw new NotFoundException('Gasto o división no encontrada en este grupo');
+    if (
+      !split ||
+      split.groupExpenseId !== expenseId ||
+      split.groupExpense.groupId !== groupId
+    ) {
+      throw new NotFoundException(
+        'Gasto o división no encontrada en este grupo',
+      );
     }
 
     const isPayer = split.groupExpense.paidById === userId;
@@ -233,13 +247,24 @@ export class ExpensesService {
 
     // La parte del propio pagador está saldada por defecto y no se puede modificar
     if (split.userId === split.groupExpense.paidById) {
-      throw new BadRequestException('El pagador no le debe nada a nadie en su propio gasto');
+      throw new BadRequestException(
+        'El pagador no le debe nada a nadie en su propio gasto',
+      );
+    }
+
+    // Si el grupo tiene activado el modo estricto, solo quien pagó el gasto puede confirmar el cobro
+    if (split.groupExpense.group.strictPayments && !isPayer) {
+      throw new ForbiddenException(
+        'En este grupo está activado el modo estricto: solo quien pagó el gasto puede confirmar los cobros.',
+      );
     }
 
     // Solo el deudor ("ya pagué") o quien pagó el gasto ("me pagaron") pueden cambiarlo.
     // Ni el admin ni terceros pueden tocarlo.
     if (!isPayer && !isDebtor) {
-      throw new ForbiddenException('Solo el deudor o quien cargó el gasto pueden cambiar este pago');
+      throw new ForbiddenException(
+        'Solo el deudor o quien cargó el gasto pueden cambiar este pago',
+      );
     }
 
     const willBePaid = !split.isPaid;

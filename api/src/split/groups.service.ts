@@ -12,9 +12,7 @@ import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { SuggestMemberDto } from './dto/suggest-member.dto';
-import { AddExpenseDto } from './dto/add-expense.dto';
 import { BalanceService } from './balance.service';
-
 
 // ─── Helpers de inclusión Prisma ─────────────────────────────────────────────
 
@@ -24,7 +22,7 @@ const MEMBER_INCLUDE = {
 
 // Solo miembros ACTIVOS cuentan como parte del grupo (los PENDING aún no aceptaron)
 const GROUP_INCLUDE = {
-  members:  { where: { status: 'ACTIVE' as const }, include: MEMBER_INCLUDE },
+  members: { where: { status: 'ACTIVE' as const }, include: MEMBER_INCLUDE },
   createdBy: { select: { id: true, name: true, email: true } },
 } as const;
 
@@ -88,8 +86,13 @@ export class GroupsService {
       where: { id: groupId },
       data: {
         ...(dto.name && { name: dto.name.trim() }),
-        ...(dto.description !== undefined && { description: dto.description?.trim() || null }),
+        ...(dto.description !== undefined && {
+          description: dto.description?.trim() || null,
+        }),
         ...(dto.icon !== undefined && { icon: dto.icon?.trim() || null }),
+        ...(dto.strictPayments !== undefined && {
+          strictPayments: dto.strictPayments,
+        }),
       },
       include: GROUP_INCLUDE,
     });
@@ -146,7 +149,9 @@ export class GroupsService {
         groupName: group.name,
         userExists: false,
       });
-      return { message: `Se envió un email de invitación a ${dto.email}. Cuando se registre, podrás invitarlo al grupo.` };
+      return {
+        message: `Se envió un email de invitación a ${dto.email}. Cuando se registre, podrás invitarlo al grupo.`,
+      };
     }
 
     // 3. Verificar que no sea ya miembro ni tenga una invitación pendiente
@@ -157,7 +162,9 @@ export class GroupsService {
       throw new BadRequestException('El usuario ya es miembro del grupo');
     }
     if (existing?.status === 'PENDING') {
-      throw new BadRequestException('El usuario ya tiene una invitación pendiente');
+      throw new BadRequestException(
+        'El usuario ya tiene una invitación pendiente',
+      );
     }
 
     // 4. Crear la invitación (PENDING)
@@ -221,18 +228,25 @@ export class GroupsService {
   }
 
   /** Elimina un miembro (solo ADMIN puede hacerlo, o el propio usuario saliendo) */
-  async removeMember(requesterId: string, groupId: string, targetUserId: string) {
-    const isSelf  = requesterId === targetUserId;
+  async removeMember(
+    requesterId: string,
+    groupId: string,
+    targetUserId: string,
+  ) {
+    const isSelf = requesterId === targetUserId;
     const isAdmin = await this.isMemberWithRole(requesterId, groupId, 'ADMIN');
 
     if (!isSelf && !isAdmin) {
-      throw new ForbiddenException('Solo un ADMIN puede eliminar a otros miembros');
+      throw new ForbiddenException(
+        'Solo un ADMIN puede eliminar a otros miembros',
+      );
     }
 
     const member = await this.prisma.groupMember.findUnique({
       where: { userId_groupId: { userId: targetUserId, groupId } },
     });
-    if (!member) throw new NotFoundException('Miembro no encontrado en el grupo');
+    if (!member)
+      throw new NotFoundException('Miembro no encontrado en el grupo');
 
     // Validar deuda del miembro a eliminar
     const balance = await this.balanceService.getBalance(requesterId, groupId);
@@ -303,11 +317,21 @@ export class GroupsService {
         `No podés abandonar el grupo porque tenés una deuda pendiente de $${Math.abs(userBal.net).toLocaleString('es-AR')}. Salda tu deuda primero.`,
       );
     }
+    if (userBal && userBal.net > 0.01) {
+      throw new BadRequestException(
+        `No podés abandonar el grupo porque el grupo te debe $${userBal.net.toLocaleString('es-AR')}. Debe saldarse el saldo antes de salir.`,
+      );
+    }
 
     // 2. Si es ADMIN, verificar que no quede acéfalo si hay más miembros activos
     if (member.role === 'ADMIN') {
       const otherAdmins = await this.prisma.groupMember.count({
-        where: { groupId, role: 'ADMIN', status: 'ACTIVE', userId: { not: userId } },
+        where: {
+          groupId,
+          role: 'ADMIN',
+          status: 'ACTIVE',
+          userId: { not: userId },
+        },
       });
       const otherMembers = await this.prisma.groupMember.count({
         where: { groupId, status: 'ACTIVE', userId: { not: userId } },
@@ -355,7 +379,9 @@ export class GroupsService {
         where: { groupId, role: 'ADMIN', status: 'ACTIVE' },
       });
       if (admins <= 1) {
-        throw new BadRequestException('El grupo debe tener al menos un administrador.');
+        throw new BadRequestException(
+          'El grupo debe tener al menos un administrador.',
+        );
       }
     }
 
@@ -376,13 +402,19 @@ export class GroupsService {
   }
 
   /** Cancela una invitación pendiente (solo ADMIN) */
-  async cancelInvitation(userId: string, groupId: string, targetUserId: string) {
+  async cancelInvitation(
+    userId: string,
+    groupId: string,
+    targetUserId: string,
+  ) {
     await this.assertAdmin(userId, groupId);
     const invite = await this.prisma.groupMember.findUnique({
       where: { userId_groupId: { userId: targetUserId, groupId } },
     });
     if (!invite || invite.status !== 'PENDING') {
-      throw new NotFoundException('No hay una invitación pendiente para ese usuario');
+      throw new NotFoundException(
+        'No hay una invitación pendiente para ese usuario',
+      );
     }
     await this.prisma.groupMember.delete({
       where: { userId_groupId: { userId: targetUserId, groupId } },
@@ -394,7 +426,9 @@ export class GroupsService {
   /** Elimina un grupo con todos sus datos asociados */
   private async deleteGroupCascade(groupId: string) {
     await this.prisma.$transaction([
-      this.prisma.expenseSplit.deleteMany({ where: { groupExpense: { groupId } } }),
+      this.prisma.expenseSplit.deleteMany({
+        where: { groupExpense: { groupId } },
+      }),
       this.prisma.groupExpense.deleteMany({ where: { groupId } }),
       this.prisma.groupMember.deleteMany({ where: { groupId } }),
       this.prisma.group.delete({ where: { id: groupId } }),
@@ -404,10 +438,7 @@ export class GroupsService {
   // ── Helpers privados ────────────────────────────────────────────────────────
 
   /** Verifica que el usuario sea miembro del grupo (sin ir a la BD) */
-  private assertMember(
-    userId: string,
-    members: Array<{ userId: string }>,
-  ) {
+  private assertMember(userId: string, members: Array<{ userId: string }>) {
     if (!members.some((m) => m.userId === userId)) {
       throw new ForbiddenException('No sos miembro de este grupo');
     }
@@ -415,7 +446,8 @@ export class GroupsService {
 
   private async assertAdmin(userId: string, groupId: string) {
     const isAdmin = await this.isMemberWithRole(userId, groupId, 'ADMIN');
-    if (!isAdmin) throw new ForbiddenException('Solo el ADMIN puede realizar esta acción');
+    if (!isAdmin)
+      throw new ForbiddenException('Solo el ADMIN puede realizar esta acción');
   }
 
   private async findPendingInvite(userId: string, groupId: string) {
@@ -423,12 +455,18 @@ export class GroupsService {
       where: { userId_groupId: { userId, groupId } },
     });
     if (!invite || invite.status !== 'PENDING') {
-      throw new NotFoundException('No tenés una invitación pendiente para este grupo');
+      throw new NotFoundException(
+        'No tenés una invitación pendiente para este grupo',
+      );
     }
     return invite;
   }
 
-  private async isMemberWithRole(userId: string, groupId: string, role: 'ADMIN' | 'MEMBER') {
+  private async isMemberWithRole(
+    userId: string,
+    groupId: string,
+    role: 'ADMIN' | 'MEMBER',
+  ) {
     const member = await this.prisma.groupMember.findUnique({
       where: { userId_groupId: { userId, groupId } },
     });

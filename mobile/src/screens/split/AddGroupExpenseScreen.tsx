@@ -97,7 +97,7 @@ export const AddGroupExpenseScreen: React.FC = () => {
 
   const includedParticipants = participants.filter((p) => p.included);
   const includedCount = includedParticipants.length;
-  const totalParsed = parseFloat(amount) || 0;
+  const totalParsed = parseFloat(amount.replace(',', '.')) || 0;
 
   const getEqualShare = (idx: number) => {
     if (includedCount === 0 || totalParsed === 0) return '0.00';
@@ -118,7 +118,7 @@ export const AddGroupExpenseScreen: React.FC = () => {
     );
   };
 
-  const customSum = includedParticipants.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0);
+  const customSum = includedParticipants.reduce((acc, p) => acc + (parseFloat(p.amount.replace(',', '.')) || 0), 0);
   const customSumOk = !splitEqual ? Math.abs(customSum - totalParsed) <= 0.02 : true;
 
   const handleSubmit = async () => {
@@ -135,7 +135,7 @@ export const AddGroupExpenseScreen: React.FC = () => {
       const includedList = participants.filter((p) => p.included);
       const splits = splitEqual
         ? includedList.map((p, i) => ({ userId: p.userId, amount: getEqualShare(i) }))
-        : includedList.map((p) => ({ userId: p.userId, amount: parseFloat(p.amount).toFixed(2) }));
+        : includedList.map((p) => ({ userId: p.userId, amount: (parseFloat(p.amount.replace(',', '.')) || 0).toFixed(2) }));
 
       await apiClient.post(`/groups/${groupId}/expenses`, {
         description: description.trim(),

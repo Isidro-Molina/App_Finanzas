@@ -65,18 +65,6 @@ export const EditProfileScreen: React.FC = () => {
         <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: colors.textPrimary, flex: 1 }}>
           Editar Perfil
         </Text>
-        {hasChanges && (
-          <TouchableOpacity
-            onPress={handleSave}
-            disabled={loading}
-            style={{ backgroundColor: colors.brand, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 }}
-          >
-            {loading
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#fff' }}>Guardar</Text>
-            }
-          </TouchableOpacity>
-        )}
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
