@@ -29,7 +29,19 @@
       "@react-native-community/datetimepicker",
       "expo-secure-store",
       "expo-web-browser",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Permitir que Finova use Face ID para iniciar sesión de forma rápida y segura."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permitir que Finova acceda a tus fotos para adjuntar comprobantes de gastos."
+        }
+      ]
     ],
     "scheme": "finova"
   }
