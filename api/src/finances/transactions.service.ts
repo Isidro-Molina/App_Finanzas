@@ -6,6 +6,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
+import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { TransactionQueryDto } from './dto/transaction-query.dto';
 
 @Injectable()
@@ -105,7 +106,7 @@ export class TransactionsService {
 
   // ─── Actualizar ──────────────────────────────────────────────────────────
 
-  async update(userId: string, id: string, dto: Partial<CreateTransactionDto>) {
+  async update(userId: string, id: string, dto: UpdateTransactionDto) {
     await this.assertOwnership(userId, id);
 
     return this.prisma.transaction.update({

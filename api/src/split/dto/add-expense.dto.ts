@@ -1,7 +1,6 @@
 import {
   IsArray,
   IsDateString,
-  IsDecimal,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -10,12 +9,13 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { IsPositiveDecimal } from 'src/common/validators/is-positive-decimal.decorator';
 
 class SplitItemDto {
   @IsUUID()
   userId: string;
 
-  @IsDecimal({ decimal_digits: '0,2' })
+  @IsPositiveDecimal()
   @IsNotEmpty()
   amount: string;
 }
@@ -26,7 +26,7 @@ export class AddExpenseDto {
   @MaxLength(200)
   description: string;
 
-  @IsDecimal({ decimal_digits: '0,2' })
+  @IsPositiveDecimal()
   @IsNotEmpty()
   amount: string; // Monto total del gasto
 

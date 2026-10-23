@@ -13,6 +13,7 @@ import {
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { TransactionsService } from '../transactions.service';
 import { CreateTransactionDto } from '../dto/create-transaction.dto';
+import { UpdateTransactionDto } from '../dto/update-transaction.dto';
 import { TransactionQueryDto } from '../dto/transaction-query.dto';
 
 @UseGuards(JwtAuthGuard)
@@ -76,7 +77,7 @@ export class TransactionsController {
   update(
     @Request() req: { user: { userId: string } },
     @Param('id') id: string,
-    @Body() dto: Partial<CreateTransactionDto>,
+    @Body() dto: UpdateTransactionDto,
   ) {
     return this.transactionsService.update(req.user.userId, id, dto);
   }
