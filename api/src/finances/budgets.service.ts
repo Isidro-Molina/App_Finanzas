@@ -23,37 +23,46 @@ export class BudgetsService {
       },
     });
 
-    // Para cada presupuesto, calcular el gasto real del mes
+    if (budgets.length === 0) {
+      return [];
+    }
+
+    // Para todos los presupuestos, calcular el gasto real del mes en una sola consulta
     const start = new Date(year, month - 1, 1);
     const end = new Date(year, month, 1);
+    const categoryIds = budgets.map((b) => b.categoryId);
 
-    return Promise.all(
-      budgets.map(async (budget) => {
-        const spent = await this.prisma.transaction.aggregate({
-          where: {
-            userId,
-            categoryId: budget.categoryId,
-            type: 'EXPENSE',
-            date: { gte: start, lt: end },
-          },
-          _sum: { amount: true },
-        });
+    const expenseAggregations = await this.prisma.transaction.groupBy({
+      by: ['categoryId'],
+      where: {
+        userId,
+        categoryId: { in: categoryIds },
+        type: 'EXPENSE',
+        date: { gte: start, lt: end },
+      },
+      _sum: { amount: true },
+    });
 
-        const spentAmount = Number(spent._sum.amount ?? 0);
-        const budgetAmount = Number(budget.amount);
+    const spentMap = new Map<string, number>();
+    for (const agg of expenseAggregations) {
+      spentMap.set(agg.categoryId, Number(agg._sum.amount ?? 0));
+    }
 
-        return {
-          ...budget,
-          amount: budgetAmount,
-          spent: +spentAmount.toFixed(2),
-          remaining: +(budgetAmount - spentAmount).toFixed(2),
-          pctUsed:
-            budgetAmount > 0
-              ? +((spentAmount / budgetAmount) * 100).toFixed(1)
-              : 0,
-        };
-      }),
-    );
+    return budgets.map((budget) => {
+      const spentAmount = spentMap.get(budget.categoryId) ?? 0;
+      const budgetAmount = Number(budget.amount);
+
+      return {
+        ...budget,
+        amount: budgetAmount,
+        spent: +spentAmount.toFixed(2),
+        remaining: +(budgetAmount - spentAmount).toFixed(2),
+        pctUsed:
+          budgetAmount > 0
+            ? +((spentAmount / budgetAmount) * 100).toFixed(1)
+            : 0,
+      };
+    });
   }
 
   /** Crea o actualiza un presupuesto (upsert por la constraint única) */
