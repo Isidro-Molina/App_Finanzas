@@ -53,3 +53,4 @@ describe('CategoriesService - Integridad de tipos y permisos', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 });
+
