@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { GroupsService } from '../groups.service';
 import { ExpensesService } from '../expenses.service';
@@ -78,6 +79,7 @@ export class GroupsController {
   // ── Miembros ────────────────────────────────────────────────────────────────
 
   /** POST /api/v1/groups/:id/members — Agregar miembro por email */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post(':id/members')
   addMember(
     @Request() req: AuthReq,
@@ -152,6 +154,7 @@ export class GroupsController {
   }
 
   /** POST /api/v1/groups/:id/suggest-member — Sugerir miembro al admin */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post(':id/suggest-member')
   suggestMember(
     @Request() req: AuthReq,
