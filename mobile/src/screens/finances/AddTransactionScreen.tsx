@@ -21,6 +21,7 @@ import {
   ExchangeRateItem,
   fetchExchangeRates,
   getRateMeta,
+  formatForeignAmount,
 } from '../../utils/exchangeRates';
 
 interface Category {
@@ -57,6 +58,7 @@ export const AddTransactionScreen: React.FC = () => {
     transaction?.type === 'INCOME' ? 'INCOME' : 'EXPENSE'
   );
   const [rateOption, setRateOption] = useState<RateOptionCode>(initialRateCode);
+  const [inputInArs, setInputInArs] = useState<boolean>(false);
   const [ratesMap, setRatesMap] = useState<Record<string, ExchangeRateItem>>({});
   const [loadingRates, setLoadingRates] = useState(false);
   const [customRate, setCustomRate] = useState(
@@ -110,6 +112,7 @@ export const AddTransactionScreen: React.FC = () => {
     setRateOption(code);
     if (code === 'ARS') {
       setCustomRate('');
+      setInputInArs(false);
       return;
     }
     const liveRate = ratesMap[code]?.sell;
@@ -126,7 +129,17 @@ export const AddTransactionScreen: React.FC = () => {
   const convertedArsAmount =
     rateOption === 'ARS'
       ? parsedInputAmount
-      : +(parsedInputAmount * parsedExchangeRate).toFixed(2);
+      : inputInArs
+        ? parsedInputAmount
+        : +(parsedInputAmount * parsedExchangeRate).toFixed(2);
+  const convertedForeignAmount =
+    rateOption === 'ARS'
+      ? 0
+      : inputInArs
+        ? parsedExchangeRate > 0
+          ? +(parsedInputAmount / parsedExchangeRate).toFixed(2)
+          : 0
+        : parsedInputAmount;
 
   const fetchCategories = async () => {
     try {
@@ -192,14 +205,22 @@ export const AddTransactionScreen: React.FC = () => {
     const finalArsAmount =
       rateOption === 'ARS'
         ? parsedAmount
-        : +(parsedAmount * parsedExchangeRate).toFixed(2);
+        : inputInArs
+          ? parsedAmount
+          : +(parsedAmount * parsedExchangeRate).toFixed(2);
+    const finalForeignAmount =
+      rateOption === 'ARS'
+        ? null
+        : inputInArs
+          ? (parsedAmount / parsedExchangeRate).toFixed(2)
+          : parsedAmount.toFixed(2);
 
     setLoading(true);
     try {
       const payload = {
         amount: finalArsAmount.toFixed(2),
         currency: activeRateMeta.currency,
-        originalAmount: rateOption === 'ARS' ? null : parsedAmount.toFixed(2),
+        originalAmount: finalForeignAmount,
         exchangeRate: rateOption === 'ARS' ? null : parsedExchangeRate.toFixed(2),
         rateType: rateOption === 'ARS' ? null : rateOption,
         type,
@@ -351,12 +372,68 @@ export const AddTransactionScreen: React.FC = () => {
             })}
           </ScrollView>
 
+          {rateOption !== 'ARS' && (
+            <View
+              style={{
+                flexDirection: 'row',
+                backgroundColor: colors.bgInput,
+                borderRadius: 10,
+                padding: 3,
+                marginBottom: 12,
+                width: '100%',
+                borderWidth: 1,
+                borderColor: colors.borderSubtle,
+              }}
+            >
+              <TouchableOpacity
+                onPress={() => setInputInArs(false)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 7,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  backgroundColor: !inputInArs ? colors.bgCard : 'transparent',
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: !inputInArs ? 'Inter_600SemiBold' : 'Inter_500Medium',
+                    fontSize: 12,
+                    color: !inputInArs ? colors.brand : colors.textMuted,
+                  }}
+                >
+                  Ingresar en {activeRateMeta.currency}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setInputInArs(true)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 7,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  backgroundColor: inputInArs ? colors.bgCard : 'transparent',
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: inputInArs ? 'Inter_600SemiBold' : 'Inter_500Medium',
+                    fontSize: 12,
+                    color: inputInArs ? colors.brand : colors.textMuted,
+                  }}
+                >
+                  Ingresar en Pesos (ARS)
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Monto ({activeRateMeta.currency})
+            Monto ({rateOption === 'ARS' || inputInArs ? 'ARS' : activeRateMeta.currency})
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: rateOption === 'ARS' ? 26 : 20, color: colors.textMuted, marginRight: 6 }}>
-              {activeRateMeta.symbol}
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: rateOption === 'ARS' || inputInArs ? 26 : 20, color: colors.textMuted, marginRight: 6 }}>
+              {rateOption === 'ARS' || inputInArs ? '$' : activeRateMeta.symbol}
             </Text>
             <TextInput
               value={amount}
@@ -377,7 +454,7 @@ export const AddTransactionScreen: React.FC = () => {
             />
           </View>
 
-          {/* Live Exchange Rate & ARS Conversion Box when non-ARS is selected */}
+          {/* Live Exchange Rate & Bidirectional Conversion Box when non-ARS is selected */}
           {rateOption !== 'ARS' && (
             <View
               style={{
@@ -448,10 +525,14 @@ export const AddTransactionScreen: React.FC = () => {
                 }}
               >
                 <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: colors.textMuted }}>
-                  Equivalente en Pesos (ARS)
+                  {inputInArs
+                    ? `Equivalente en ${activeRateMeta.currency}`
+                    : 'Equivalente en Pesos (ARS)'}
                 </Text>
                 <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: colors.brand }}>
-                  {formatCurrency(convertedArsAmount)}
+                  {inputInArs
+                    ? formatForeignAmount(convertedForeignAmount, activeRateMeta.currency)
+                    : formatCurrency(convertedArsAmount)}
                 </Text>
               </View>
             </View>

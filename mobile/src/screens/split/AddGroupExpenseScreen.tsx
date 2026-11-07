@@ -21,6 +21,7 @@ import {
   ExchangeRateItem,
   fetchExchangeRates,
   getRateMeta,
+  formatForeignAmount,
 } from '../../utils/exchangeRates';
 
 interface Member {
@@ -57,6 +58,7 @@ export const AddGroupExpenseScreen: React.FC = () => {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [rateOption, setRateOption] = useState<RateOptionCode>('ARS');
+  const [inputInArs, setInputInArs] = useState<boolean>(false);
   const [ratesMap, setRatesMap] = useState<Record<string, ExchangeRateItem>>({});
   const [loadingRates, setLoadingRates] = useState(false);
   const [customRate, setCustomRate] = useState('');
@@ -126,6 +128,7 @@ export const AddGroupExpenseScreen: React.FC = () => {
     setRateOption(code);
     if (code === 'ARS') {
       setCustomRate('');
+      setInputInArs(false);
       return;
     }
     const liveRate = ratesMap[code]?.sell;
@@ -144,7 +147,17 @@ export const AddGroupExpenseScreen: React.FC = () => {
   const totalParsed =
     rateOption === 'ARS'
       ? parsedInputAmount
-      : +(parsedInputAmount * parsedExchangeRate).toFixed(2);
+      : inputInArs
+        ? parsedInputAmount
+        : +(parsedInputAmount * parsedExchangeRate).toFixed(2);
+  const convertedForeignAmount =
+    rateOption === 'ARS'
+      ? 0
+      : inputInArs
+        ? parsedExchangeRate > 0
+          ? +(parsedInputAmount / parsedExchangeRate).toFixed(2)
+          : 0
+        : parsedInputAmount;
 
   const getEqualShare = (idx: number) => {
     if (includedCount === 0 || totalParsed === 0) return '0.00';
@@ -204,7 +217,7 @@ export const AddGroupExpenseScreen: React.FC = () => {
         description: description.trim(),
         amount: totalParsed.toFixed(2),
         currency: activeRateMeta.currency,
-        originalAmount: rateOption === 'ARS' ? null : parsedInputAmount.toFixed(2),
+        originalAmount: rateOption === 'ARS' ? null : convertedForeignAmount.toFixed(2),
         exchangeRate: rateOption === 'ARS' ? null : parsedExchangeRate.toFixed(2),
         rateType: rateOption === 'ARS' ? null : rateOption,
         date: selectedDate.toISOString(),
@@ -318,12 +331,68 @@ export const AddGroupExpenseScreen: React.FC = () => {
             })}
           </ScrollView>
 
+          {rateOption !== 'ARS' && (
+            <View
+              style={{
+                flexDirection: 'row',
+                backgroundColor: colors.bgInput,
+                borderRadius: 10,
+                padding: 3,
+                marginBottom: 12,
+                width: '100%',
+                borderWidth: 1,
+                borderColor: colors.borderSubtle,
+              }}
+            >
+              <TouchableOpacity
+                onPress={() => setInputInArs(false)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 7,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  backgroundColor: !inputInArs ? colors.bgCard : 'transparent',
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: !inputInArs ? 'Inter_600SemiBold' : 'Inter_500Medium',
+                    fontSize: 12,
+                    color: !inputInArs ? colors.brand : colors.textMuted,
+                  }}
+                >
+                  Ingresar en {activeRateMeta.currency}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setInputInArs(true)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 7,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  backgroundColor: inputInArs ? colors.bgCard : 'transparent',
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: inputInArs ? 'Inter_600SemiBold' : 'Inter_500Medium',
+                    fontSize: 12,
+                    color: inputInArs ? colors.brand : colors.textMuted,
+                  }}
+                >
+                  Ingresar en Pesos (ARS)
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-            Monto Total ({activeRateMeta.currency})
+            Monto Total ({rateOption === 'ARS' || inputInArs ? 'ARS' : activeRateMeta.currency})
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: rateOption === 'ARS' ? 26 : 20, color: colors.textMuted, marginRight: 6 }}>
-              {activeRateMeta.symbol}
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: rateOption === 'ARS' || inputInArs ? 26 : 20, color: colors.textMuted, marginRight: 6 }}>
+              {rateOption === 'ARS' || inputInArs ? '$' : activeRateMeta.symbol}
             </Text>
             <TextInput
               value={amount}
@@ -405,10 +474,14 @@ export const AddGroupExpenseScreen: React.FC = () => {
                 }}
               >
                 <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: colors.textMuted }}>
-                  Total a dividir en Pesos (ARS)
+                  {inputInArs
+                    ? `Equivalente en ${activeRateMeta.currency}`
+                    : 'Total a dividir en Pesos (ARS)'}
                 </Text>
                 <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: colors.brand }}>
-                  {formatCurrency(totalParsed)}
+                  {inputInArs
+                    ? formatForeignAmount(convertedForeignAmount, activeRateMeta.currency)
+                    : formatCurrency(totalParsed)}
                 </Text>
               </View>
             </View>
