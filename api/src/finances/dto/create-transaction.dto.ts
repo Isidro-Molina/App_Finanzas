@@ -6,6 +6,7 @@ import {
   IsString,
   IsUUID,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 import { TransactionType } from '@prisma/client';
 import { IsPositiveDecimal } from 'src/common/validators/is-positive-decimal.decorator';
@@ -22,9 +23,10 @@ export class CreateTransactionDto {
   categoryId: string;
 
   @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined)
   @IsString()
   @MaxLength(200)
-  description?: string;
+  description?: string | null;
 
   @IsOptional()
   @IsDateString({}, { message: 'La fecha debe ser un string ISO 8601 válido' })

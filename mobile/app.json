@@ -1,14 +1,17 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "Finova",
+    "slug": "finova",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.finova.app"
+      "bundleIdentifier": "com.finova.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -39,7 +42,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Permitir que Finova acceda a tus fotos para adjuntar comprobantes de gastos."
+          "photosPermission": "Permitir que Finova acceda a tus fotos para personalizar el ícono de tus grupos."
         }
       ]
     ],

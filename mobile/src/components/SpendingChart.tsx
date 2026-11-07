@@ -84,7 +84,7 @@ export const SpendingChart: React.FC<SpendingChartProps> = ({ categories, totalE
 
     const arcs = expensesOnly.map((cat, i) => {
       const percentage = cat.total / totalExpense;
-      const sweepAngle = percentage * 2 * Math.PI - GAP;
+      const sweepAngle = Math.max(0.02, percentage * 2 * Math.PI - GAP);
 
       const startAngle = cumulativeAngle;
       const endAngle = cumulativeAngle + sweepAngle;

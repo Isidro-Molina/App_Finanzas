@@ -106,6 +106,18 @@ describe('AuthService - Autenticación y recuperación de cuenta', () => {
       ).rejects.toThrow(UnauthorizedException);
     });
 
+    it('debe arrojar UnauthorizedException si la cuenta fue creada con Google (passwordHash vacío)', async () => {
+      mockUsersService.findByEmail.mockResolvedValue({
+        id: 'user-google',
+        email: 'google@finova.com',
+        passwordHash: '',
+      });
+
+      await expect(
+        service.login({ email: 'google@finova.com', password: 'any' }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
     it('debe generar token de sesión si las credenciales son válidas', async () => {
       mockUsersService.findByEmail.mockResolvedValue({
         id: 'user-1',

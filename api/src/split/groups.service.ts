@@ -233,10 +233,13 @@ export class GroupsService {
     groupId: string,
     targetUserId: string,
   ) {
-    const isSelf = requesterId === targetUserId;
+    if (requesterId === targetUserId) {
+      return this.leaveGroup(requesterId, groupId);
+    }
+
     const isAdmin = await this.isMemberWithRole(requesterId, groupId, 'ADMIN');
 
-    if (!isSelf && !isAdmin) {
+    if (!isAdmin) {
       throw new ForbiddenException(
         'Solo un ADMIN puede eliminar a otros miembros',
       );
@@ -287,7 +290,7 @@ export class GroupsService {
           userId: admin.userId,
           title: 'Sugerencia de miembro',
           message: `${sender?.name ?? 'Un miembro'} sugirió sumar a "${dto.email}" al grupo "${group.name}".`,
-          type: 'GROUP_INVITE',
+          type: 'MEMBER_SUGGESTION',
           relatedId: groupId,
         });
       }

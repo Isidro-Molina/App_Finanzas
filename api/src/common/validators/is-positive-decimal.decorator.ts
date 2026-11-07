@@ -23,7 +23,8 @@ export function IsPositiveDecimal(validationOptions?: ValidationOptions) {
           if (typeof value !== 'string') return false;
           if (!/^\d+(\.\d{1,2})?$/.test(value)) return false;
           const num = parseFloat(value);
-          return !isNaN(num) && num > 0 && num <= 999999999999.99;
+          // PostgreSQL DECIMAL(12, 2) soporta hasta 10 dígitos enteros + 2 decimales
+          return !isNaN(num) && num > 0 && num <= 9999999999.99;
         },
       },
     });

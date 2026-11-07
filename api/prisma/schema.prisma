@@ -36,6 +36,7 @@ model User {
   email        String   @unique
   name         String
   passwordHash String   // Hash bcrypt — NUNCA exponer al cliente
+  isDeleted    Boolean  @default(false) // true = cuenta eliminada preservando historial grupal
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -70,6 +71,8 @@ model Category {
   transactions  Transaction[]
   budgets       Budget[]
   groupExpenses GroupExpense[]
+
+  @@index([userId, isDeleted])
 }
 
 model Transaction {
@@ -89,6 +92,8 @@ model Transaction {
   expenseSplit ExpenseSplit?
 
   @@index([userId, date])
+  @@index([userId, type, date])
+  @@index([categoryId])
 }
 
 // Presupuesto mensual por categoría (ej: $50.000 en "Salidas" para Agosto 2025)
@@ -142,6 +147,7 @@ model GroupMember {
   group Group @relation(fields: [groupId], references: [id])
 
   @@id([userId, groupId]) // Clave primaria compuesta
+  @@index([groupId, status])
 }
 
 // El ticket o recibo general (Ej: Juan pagó $10.000 de asado)
@@ -158,11 +164,13 @@ model GroupExpense {
   paidBy   User   @relation("PaidBy", fields: [paidById], references: [id])
 
   categoryId String?
-  category   Category? @relation(fields: [categoryId], references: [id])
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   splits ExpenseSplit[]
 
   @@index([groupId, date])
+  @@index([paidById])
+  @@index([categoryId])
 }
 
 // Cómo se divide ese ticket (Ej: Pedro debe $2.500, María debe $2.500)
@@ -179,6 +187,10 @@ model ExpenseSplit {
 
   transactionId String?      @unique
   transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@unique([groupExpenseId, userId])
+  @@index([groupExpenseId, isPaid])
+  @@index([userId])
 }
 // ==========================================
 // NOTIFICACIONES
@@ -186,6 +198,9 @@ model ExpenseSplit {
 enum NotificationType {
   GROUP_INVITE
   GROUP_EXPENSE
+  MEMBER_SUGGESTION
+  BUDGET_ALERT
+  SYSTEM
 }
 
 model Notification {
@@ -199,6 +214,9 @@ model Notification {
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, isRead])
 }
 
 // ==========================================

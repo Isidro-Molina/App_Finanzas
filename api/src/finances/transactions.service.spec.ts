@@ -17,6 +17,11 @@ describe('TransactionsService - Operaciones y seguridad financiera', () => {
       category: {
         findFirst: jest.fn(),
       },
+      expenseSplit: {
+        findMany: jest.fn().mockResolvedValue([]),
+        update: jest.fn(),
+      },
+      $transaction: jest.fn((cb: (tx: any) => unknown) => cb(mockPrisma)),
     };
     service = new TransactionsService(mockPrisma);
   });
@@ -137,6 +142,33 @@ describe('TransactionsService - Operaciones y seguridad financiera', () => {
       // Línea 2 debe tener apóstrofe en @SUM
       expect(lines[2]).toContain('"\'@SUM(1,2)"');
       expect(lines[2]).toContain('"Normal Category"');
+    });
+  });
+
+  describe('remove - Sincronización con pagos de gastos grupales', () => {
+    it('debe revertir isPaid a false si la transacción eliminada correspondía al pago de deuda grupal', async () => {
+      mockPrisma.transaction.findUnique.mockResolvedValue({
+        id: 'tx-1',
+        userId: 'user-2',
+      });
+      mockPrisma.expenseSplit.findMany.mockResolvedValue([
+        {
+          id: 'split-2',
+          userId: 'user-2',
+          transactionId: 'tx-1',
+          groupExpense: { paidById: 'user-1' },
+        },
+      ]);
+
+      await service.remove('user-2', 'tx-1');
+
+      expect(mockPrisma.expenseSplit.update).toHaveBeenCalledWith({
+        where: { id: 'split-2' },
+        data: { transactionId: null, isPaid: false },
+      });
+      expect(mockPrisma.transaction.delete).toHaveBeenCalledWith({
+        where: { id: 'tx-1' },
+      });
     });
   });
 });

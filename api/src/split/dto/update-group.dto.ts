@@ -4,6 +4,7 @@ import {
   IsString,
   MinLength,
   MaxLength,
+  Matches,
   ValidateIf,
 } from 'class-validator';
 
@@ -25,6 +26,13 @@ export class UpdateGroupDto {
   @IsOptional()
   @ValidateIf((_, val) => val !== null && val !== undefined)
   @IsString()
+  @MaxLength(500000, {
+    message: 'La imagen es demasiado grande (máximo ~350KB)',
+  })
+  @Matches(/^data:image\/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$/, {
+    message:
+      'El ícono debe ser una imagen válida en formato base64 (JPEG, PNG o WebP)',
+  })
   icon?: string | null;
 
   @IsOptional()

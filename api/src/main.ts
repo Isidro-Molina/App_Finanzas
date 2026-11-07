@@ -5,14 +5,25 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
+  if (
+    !process.env.JWT_SECRET ||
+    process.env.JWT_SECRET.length < 32 ||
+    process.env.JWT_SECRET.includes('change_me')
+  ) {
+    throw new Error(
+      'CRITICAL: JWT_SECRET must be defined, have at least 32 characters, and not use default example values.',
+    );
+  }
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Cabeceras HTTP seguras
   app.use(helmet());
 
   // Habilitar CORS con lista blanca segura
-  const allowedOrigins = process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+  const rawOrigins = process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN;
+  const allowedOrigins = rawOrigins
+    ? rawOrigins.split(',').map((o) => o.trim())
     : [
         'http://localhost:8081',
         'http://localhost:19006',
@@ -41,9 +52,9 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Límite ampliado para permitir fotos de grupo en base64
-  app.useBodyParser('json', { limit: '10mb' });
-  app.useBodyParser('urlencoded', { limit: '10mb', extended: true });
+  // Límite controlado para permitir fotos de grupo en base64 sin exponer a DoS de memoria
+  app.useBodyParser('json', { limit: '1mb' });
+  app.useBodyParser('urlencoded', { limit: '1mb', extended: true });
 
   // Activa la validación automática de todos los DTOs en la app.
   // - whitelist: true → descarta propiedades no declaradas en el DTO

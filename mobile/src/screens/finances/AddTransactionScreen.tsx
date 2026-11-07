@@ -128,7 +128,7 @@ export const AddTransactionScreen: React.FC = () => {
         amount: parsedAmount.toFixed(2),
         type,
         categoryId: selectedCategoryId,
-        description: description.trim() || undefined,
+        description: description.trim() ? description.trim() : isEditing ? null : undefined,
         date: selectedDate.toISOString(),
       };
 
@@ -194,7 +194,11 @@ export const AddTransactionScreen: React.FC = () => {
         {/* Type Selector */}
         <View style={{ marginHorizontal: 20, marginBottom: 16, flexDirection: 'row', backgroundColor: colors.bgCard, padding: 6, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
           <TouchableOpacity
-            onPress={() => { setType('EXPENSE'); setSelectedCategoryId(null); }}
+            onPress={() => {
+              setType('EXPENSE');
+              const firstExpense = categories.find((c) => c.type === 'EXPENSE');
+              setSelectedCategoryId(firstExpense?.id ?? null);
+            }}
             style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12, backgroundColor: type === 'EXPENSE' ? '#EFF6FF' : 'transparent' }}
           >
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: type === 'EXPENSE' ? '#2563EB' : colors.textMuted }}>
@@ -202,7 +206,11 @@ export const AddTransactionScreen: React.FC = () => {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => { setType('INCOME'); setSelectedCategoryId(null); }}
+            onPress={() => {
+              setType('INCOME');
+              const firstIncome = categories.find((c) => c.type === 'INCOME');
+              setSelectedCategoryId(firstIncome?.id ?? null);
+            }}
             style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12, backgroundColor: type === 'INCOME' ? '#ECFDF5' : 'transparent' }}
           >
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: type === 'INCOME' ? '#059669' : colors.textMuted }}>

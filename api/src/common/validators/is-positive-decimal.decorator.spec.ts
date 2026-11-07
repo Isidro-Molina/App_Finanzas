@@ -12,12 +12,30 @@ class TestAmountDto {
 
 describe('IsPositiveDecimal Validator', () => {
   it('debe aceptar números enteros y decimales válidos positivos', async () => {
-    const validAmounts = ['10', '10.5', '10.50', '0.01', '999999.99', '1'];
+    const validAmounts = [
+      '10',
+      '10.5',
+      '10.50',
+      '0.01',
+      '999999.99',
+      '9999999999.99',
+      '1',
+    ];
 
     for (const val of validAmounts) {
       const dto = new TestAmountDto(val);
       const errors = await validate(dto);
       expect(errors).toHaveLength(0);
+    }
+  });
+
+  it('debe rechazar montos que excedan la precisión de Decimal(12, 2)', async () => {
+    const overflowAmounts = ['10000000000.00', '999999999999.99'];
+
+    for (const val of overflowAmounts) {
+      const dto = new TestAmountDto(val);
+      const errors = await validate(dto);
+      expect(errors.length).toBeGreaterThan(0);
     }
   });
 

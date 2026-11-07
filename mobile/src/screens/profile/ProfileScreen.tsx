@@ -34,22 +34,22 @@ export const ProfileScreen = () => {
       const month = now.getMonth() + 1;
       const year = now.getFullYear();
 
-      // Preparar las consultas de los últimos 6 meses
+      // Preparar las consultas de los 5 meses anteriores (el mes actual ya viene en summaryRes)
       const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-      const monthRequests = [];
-      for (let i = 5; i >= 0; i--) {
+      const pastMonthRequests = [];
+      for (let i = 5; i >= 1; i--) {
         const d = new Date(year, month - 1 - i, 1);
         const m = d.getMonth() + 1;
         const y = d.getFullYear();
-        monthRequests.push({ monthName: monthNames[m - 1], m, y, isCurrent: i === 0 });
+        pastMonthRequests.push({ monthName: monthNames[m - 1], m, y, isCurrent: false });
       }
 
-      // Ejecutar todas las llamadas en paralelo
-      const [summaryRes, groupsRes, txRes, ...monthsData] = await Promise.all([
+      // Ejecutar todas las llamadas en paralelo sin duplicar el mes actual
+      const [summaryRes, groupsRes, txRes, ...pastMonthsData] = await Promise.all([
         apiClient.get(`/transactions/summary?month=${month}&year=${year}`),
         apiClient.get('/groups'),
         apiClient.get(`/transactions?month=${month}&year=${year}`),
-        ...monthRequests.map((req) =>
+        ...pastMonthRequests.map((req) =>
           apiClient
             .get(`/transactions/summary?month=${req.m}&year=${req.y}`)
             .then((res) => ({ month: req.monthName, value: res.data.totalExpense ?? 0, isCurrent: req.isCurrent }))
@@ -59,8 +59,19 @@ export const ProfileScreen = () => {
 
       setSummary(summaryRes.data);
       setGroupCount(groupsRes.data.length);
-      setTxCount(txRes.data.length);
-      setMonthlySeries(monthsData);
+      setTxCount(
+        Array.isArray(txRes.data)
+          ? txRes.data.filter((t: any) => t.type === 'EXPENSE').length
+          : 0,
+      );
+      setMonthlySeries([
+        ...pastMonthsData,
+        {
+          month: monthNames[month - 1],
+          value: summaryRes.data?.totalExpense ?? 0,
+          isCurrent: true,
+        },
+      ]);
     } catch (e) {
       console.error('Error loading profile:', e);
     } finally {
@@ -132,7 +143,7 @@ export const ProfileScreen = () => {
             style={{ width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)', marginBottom: 14 }}
           >
             <Text style={{ fontFamily: 'Outfit_800ExtraBold', fontSize: 32, color: '#fff' }}>
-              {user?.name ? user.name[0].toUpperCase() : '?'}
+              {(user?.name?.trim()?.[0] ?? '?').toUpperCase()}
             </Text>
           </LinearGradient>
 
@@ -214,7 +225,9 @@ export const ProfileScreen = () => {
                 </View>
                 <View style={{ alignItems: 'center' }}>
                   <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: colors.textMuted, marginBottom: 2 }}>Balance</Text>
-                  <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 14, color: (summary?.balance ?? 0) >= 0 ? colors.income : colors.expense }}>{formatCurrency(Math.abs(summary?.balance ?? 0))}</Text>
+                  <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 14, color: (summary?.balance ?? 0) >= 0 ? colors.income : colors.expense }}>
+                    {(summary?.balance ?? 0) < 0 ? `-${formatCurrency(Math.abs(summary?.balance ?? 0))}` : formatCurrency(summary?.balance ?? 0)}
+                  </Text>
                 </View>
               </View>
             </View>

@@ -62,6 +62,13 @@ export class ExpensesService {
 
     if (dto.splits && dto.splits.length > 0) {
       // ── División personalizada ──────────────────────────────────────────────
+      const uniqueUsers = new Set(dto.splits.map((s) => s.userId));
+      if (uniqueUsers.size !== dto.splits.length) {
+        throw new BadRequestException(
+          'No se puede incluir al mismo miembro más de una vez en la división del gasto',
+        );
+      }
+
       const splitsSum = dto.splits.reduce(
         (acc, s) => acc + parseFloat(s.amount),
         0,
@@ -101,11 +108,31 @@ export class ExpensesService {
       }));
     }
 
-    // Resolver categoría (la elegida o 'Otros' global por defecto)
+    // Resolver y validar categoría (la elegida debe ser pública o del usuario pagador, tipo EXPENSE y activa)
     let categoryId = dto.categoryId;
-    if (!categoryId) {
+    if (categoryId) {
+      const selectedCategory = await this.prisma.category.findUnique({
+        where: { id: categoryId },
+      });
+      if (!selectedCategory || selectedCategory.isDeleted) {
+        throw new BadRequestException('La categoría seleccionada no existe');
+      }
+      if (
+        selectedCategory.userId !== null &&
+        selectedCategory.userId !== userId
+      ) {
+        throw new ForbiddenException(
+          'No tenés permiso para usar esta categoría',
+        );
+      }
+      if (selectedCategory.type !== 'EXPENSE') {
+        throw new BadRequestException(
+          'Los gastos grupales deben asociarse a una categoría de tipo Gasto (EXPENSE)',
+        );
+      }
+    } else {
       const otrosCategory = await this.prisma.category.findFirst({
-        where: { name: 'Otros', userId: null },
+        where: { name: 'Otros', userId: null, isDeleted: false },
       });
       categoryId = otrosCategory?.id;
     }
@@ -120,11 +147,11 @@ export class ExpensesService {
           amount: dto.amount,
           date: dto.date ? new Date(dto.date) : new Date(),
           categoryId: categoryId || null,
-          // El split del propio pagador nace saldado (no se debe a sí mismo)
+          // El split del propio pagador (o de monto 0) nace saldado
           splits: {
             create: splitsData.map((s) => ({
               ...s,
-              isPaid: s.userId === userId,
+              isPaid: s.userId === userId || parseFloat(s.amountOwed) <= 0,
             })),
           },
         },
@@ -134,9 +161,13 @@ export class ExpensesService {
         },
       });
 
-      // Crear transacción personal para el pagador por su parte proporcional
+      // Crear transacción personal para el pagador por su parte proporcional (si > 0)
       const payerSplit = expense.splits.find((s) => s.userId === userId);
-      if (payerSplit && categoryId) {
+      if (
+        payerSplit &&
+        categoryId &&
+        parseFloat(String(payerSplit.amountOwed)) > 0
+      ) {
         const txPersonal = await tx.transaction.create({
           data: {
             userId,
@@ -195,6 +226,16 @@ export class ExpensesService {
       );
     }
 
+    // No permitir eliminar si otros miembros ya marcaron su parte como pagada
+    const hasConfirmedOtherPayments = expense.splits.some(
+      (s) => s.userId !== userId && s.isPaid,
+    );
+    if (hasConfirmedOtherPayments) {
+      throw new BadRequestException(
+        'No podés eliminar un gasto que ya tiene pagos confirmados por otros miembros. Desmarcá los pagos primero.',
+      );
+    }
+
     const txIds = expense.splits
       .map((s) => s.transactionId)
       .filter((id): id is string => Boolean(id));
@@ -204,7 +245,7 @@ export class ExpensesService {
 
       if (txIds.length > 0) {
         await tx.transaction.deleteMany({
-          where: { id: { in: txIds } },
+          where: { id: { in: txIds }, userId },
         });
       }
     });
@@ -226,7 +267,10 @@ export class ExpensesService {
       where: { id: splitId },
       include: {
         groupExpense: {
-          include: { group: { select: { name: true, strictPayments: true } } },
+          include: {
+            group: { select: { name: true, strictPayments: true } },
+            category: true,
+          },
         },
         user: { select: { id: true, name: true, email: true } },
       },
@@ -273,22 +317,47 @@ export class ExpensesService {
       let transactionId = split.transactionId;
 
       if (willBePaid) {
-        // Al marcar como pagado, generar la transacción personal para el deudor
-        let categoryId = split.groupExpense.categoryId;
-        if (!categoryId) {
-          const otrosCat = await tx.category.findFirst({
-            where: { name: 'Otros', userId: null },
-          });
-          categoryId = otrosCat?.id ?? null;
+        // Al marcar como pagado, resolver la categoría para el deudor:
+        // - Si la categoría del gasto es global (userId === null) o ya pertenece al deudor, se usa directamente.
+        // - Si es una categoría personalizada de quien pagó, buscamos si el deudor tiene una categoría activa con el mismo nombre.
+        // - En caso contrario, se asigna la categoría global "Otros".
+        let targetCategoryId: string | null = null;
+        const expenseCat = split.groupExpense.category;
+
+        if (expenseCat && !expenseCat.isDeleted) {
+          if (
+            expenseCat.userId === null ||
+            expenseCat.userId === split.userId
+          ) {
+            targetCategoryId = expenseCat.id;
+          } else {
+            const matchingDebtorCat = await tx.category.findFirst({
+              where: {
+                name: { equals: expenseCat.name, mode: 'insensitive' },
+                isDeleted: false,
+                type: 'EXPENSE',
+                OR: [{ userId: split.userId }, { userId: null }],
+              },
+              orderBy: { userId: 'desc' },
+            });
+            targetCategoryId = matchingDebtorCat?.id ?? null;
+          }
         }
 
-        if (categoryId) {
+        if (!targetCategoryId) {
+          const otrosCat = await tx.category.findFirst({
+            where: { name: 'Otros', userId: null, isDeleted: false },
+          });
+          targetCategoryId = otrosCat?.id ?? null;
+        }
+
+        if (targetCategoryId && parseFloat(String(split.amountOwed)) > 0) {
           const personalTx = await tx.transaction.create({
             data: {
               userId: split.userId,
               amount: split.amountOwed,
               type: 'EXPENSE',
-              categoryId,
+              categoryId: targetCategoryId,
               description: `${split.groupExpense.description} (${split.groupExpense.group.name})`,
               date: new Date(),
             },
@@ -298,7 +367,9 @@ export class ExpensesService {
       } else {
         // Si se desmarca como pagado, eliminar la transacción personal si existía
         if (transactionId) {
-          await tx.transaction.delete({ where: { id: transactionId } });
+          await tx.transaction.deleteMany({
+            where: { id: transactionId, userId: split.userId },
+          });
           transactionId = null;
         }
       }

@@ -72,11 +72,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await SecureStore.setItemAsync(TOKEN_KEY, accessToken);
     await SecureStore.setItemAsync(USER_KEY, JSON.stringify(userData));
 
-    // If biometric is enabled, refresh the stored biometric session
+    // If biometric is enabled for this same user, refresh the stored biometric session
     const bioEnabled = await SecureStore.getItemAsync(BIOMETRIC_ENABLED_KEY);
     if (bioEnabled === 'true') {
-      await SecureStore.setItemAsync(BIOMETRIC_TOKEN_KEY, accessToken);
-      await SecureStore.setItemAsync(BIOMETRIC_USER_KEY, JSON.stringify(userData));
+      const bioUserStr = await SecureStore.getItemAsync(BIOMETRIC_USER_KEY);
+      let isSameBioUser = true;
+      if (bioUserStr) {
+        try {
+          const parsedBioUser = JSON.parse(bioUserStr);
+          isSameBioUser = parsedBioUser?.id === userData.id;
+        } catch {
+          isSameBioUser = false;
+        }
+      }
+      if (isSameBioUser) {
+        await SecureStore.setItemAsync(BIOMETRIC_TOKEN_KEY, accessToken);
+        await SecureStore.setItemAsync(BIOMETRIC_USER_KEY, JSON.stringify(userData));
+      }
     }
   }
 
@@ -176,8 +188,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         await saveSession(bioToken, verifyRes.data);
         return true;
-      } catch (err) {
+      } catch (err: any) {
         console.warn('Biometric session expired or invalid:', err);
+        if (err?.response?.status === 401) {
+          await disableBiometric();
+        }
         return false;
       }
     } catch (e) {
