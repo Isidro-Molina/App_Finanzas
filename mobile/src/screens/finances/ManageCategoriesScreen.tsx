@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   Alert,
   Modal,
   TextInput,
@@ -15,6 +14,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import apiClient from '../../api/client';
 import { ArrowLeft, Plus, Pencil, Trash2, Check, X } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { Spinner } from '../../components/Spinner';
 
 interface Category {
   id: string;
@@ -140,7 +140,7 @@ export const ManageCategoriesScreen: React.FC = () => {
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={colors.brand} />
+        <Spinner size="large" color={colors.brand} />
       </View>
     );
   }
@@ -307,7 +307,7 @@ export const ManageCategoriesScreen: React.FC = () => {
               disabled={saving}
               style={{ backgroundColor: colors.brand, borderRadius: 14, paddingVertical: 16, alignItems: 'center', shadowColor: colors.brand, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 4 }}
             >
-              {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>{editingCategory ? 'Guardar cambios' : 'Crear categoría'}</Text>}
+              {saving ? <Spinner size={18} color="#fff" /> : <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>{editingCategory ? 'Guardar cambios' : 'Crear categoría'}</Text>}
             </TouchableOpacity>
           </Pressable>
         </Pressable>

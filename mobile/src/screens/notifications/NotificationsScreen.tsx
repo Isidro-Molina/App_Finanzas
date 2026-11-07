@@ -1,9 +1,10 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Users, Receipt, BellOff, CheckCheck, Trash2 } from 'lucide-react-native';
 import apiClient from '../../api/client';
 import { useTheme } from '../../context/ThemeContext';
+import { Spinner } from '../../components/Spinner';
 
 interface AppNotification {
   id: string;
@@ -207,7 +208,7 @@ export const NotificationsScreen = ({ onUnreadChange }: Props) => {
           {item.type === 'GROUP_INVITE' && !isSuggestion && item.inviteStatus === 'PENDING' && (
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
               {respondingId === item.id ? (
-                <ActivityIndicator color={colors.brand} />
+                <Spinner size={18} color={colors.brand} />
               ) : (
                 <>
                   <TouchableOpacity
@@ -260,7 +261,9 @@ export const NotificationsScreen = ({ onUnreadChange }: Props) => {
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color={colors.brand} style={{ marginTop: 40 }} />
+        <View style={{ alignItems: 'center', marginTop: 40 }}>
+          <Spinner size="large" color={colors.brand} />
+        </View>
       ) : (
         <FlatList
           data={items}

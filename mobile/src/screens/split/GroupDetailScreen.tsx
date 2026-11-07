@@ -1,10 +1,9 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   Modal,
   TextInput,
   Alert,
@@ -15,6 +14,8 @@ import {
 import { useFocusEffect, useRoute, useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import apiClient from '../../api/client';
+import { Spinner } from '../../components/Spinner';
+import { registerGroupDetailRefresh, wasGroupJustSynced } from '../../utils/syncEvents';
 import {
   ArrowLeft,
   UserPlus,
@@ -109,7 +110,6 @@ export const GroupDetailScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
-  const hasLoadedOnceRef = useRef(false);
 
   // Modal invitar / sugerir miembro
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
@@ -136,8 +136,8 @@ export const GroupDetailScreen = () => {
   const currentMember = group?.members.find((m) => m.userId === user?.id);
   const isAdmin = currentMember?.role === 'ADMIN';
 
-  const fetchData = async (showLoadingOverlay = false) => {
-    if (showLoadingOverlay || hasLoadedOnceRef.current) setIsUpdating(true);
+  const fetchData = useCallback(async (showLoadingOverlay = false) => {
+    if (showLoadingOverlay) setIsUpdating(true);
     try {
       const [groupRes, expRes, balRes] = await Promise.all([
         apiClient.get(`/groups/${groupId}`),
@@ -147,13 +147,13 @@ export const GroupDetailScreen = () => {
       setGroup(groupRes.data);
       setExpenses(expRes.data);
       setBalance(balRes.data);
-      hasLoadedOnceRef.current = true;
 
       // Si el modal de detalle de gasto está abierto, actualizarlo con la info nueva
-      if (selectedExpense) {
-        const updatedExp = (expRes.data as Expense[]).find((e) => e.id === selectedExpense.id);
-        if (updatedExp) setSelectedExpense(updatedExp);
-      }
+      setSelectedExpense((prev) => {
+        if (!prev) return null;
+        const updatedExp = (expRes.data as Expense[]).find((e) => e.id === prev.id);
+        return updatedExp ?? prev;
+      });
     } catch (e) {
       console.error('Error al cargar grupo:', e);
     } finally {
@@ -161,12 +161,17 @@ export const GroupDetailScreen = () => {
       setRefreshing(false);
       setIsUpdating(false);
     }
-  };
+  }, [groupId]);
+
+  useEffect(() => {
+    return registerGroupDetailRefresh(groupId, () => fetchData(false));
+  }, [groupId, fetchData]);
 
   useFocusEffect(
     useCallback(() => {
+      if (wasGroupJustSynced(groupId)) return;
       fetchData(false);
-    }, [groupId, refreshTimestamp]),
+    }, [groupId, refreshTimestamp, fetchData]),
   );
 
   const handleOpenEdit = () => {
@@ -443,7 +448,7 @@ export const GroupDetailScreen = () => {
   if (loading && !refreshing) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={colors.brand} />
+        <Spinner size="large" color={colors.brand} />
       </View>
     );
   }
@@ -554,7 +559,7 @@ export const GroupDetailScreen = () => {
         {/* Indicador de actualización cuando se sincronizan gastos */}
         {isUpdating && (
           <View style={{ backgroundColor: colors.bgCard, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: `${colors.brand}30`, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <ActivityIndicator size="small" color={colors.brand} />
+            <Spinner size="small" color={colors.brand} />
             <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: colors.textSecondary }}>
               Actualizando gastos del grupo...
             </Text>
@@ -724,7 +729,7 @@ export const GroupDetailScreen = () => {
             />
             <TouchableOpacity onPress={handleInviteOrSuggest} disabled={inviting} style={{ width: '100%', paddingVertical: 14, backgroundColor: colors.brand, borderRadius: 14, alignItems: 'center' }}>
               {inviting ? (
-                <ActivityIndicator color="#fff" />
+                <Spinner size={18} color="#fff" />
               ) : (
                 <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#fff', fontSize: 15 }}>
                   {isAdmin ? 'Invitar integrante' : 'Enviar sugerencia'}
@@ -850,7 +855,7 @@ export const GroupDetailScreen = () => {
             </View>
 
             <TouchableOpacity onPress={handleSaveGroup} disabled={savingGroup} style={{ width: '100%', paddingVertical: 14, backgroundColor: colors.brand, borderRadius: 14, alignItems: 'center' }}>
-              {savingGroup ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#fff', fontSize: 15 }}>Guardar cambios</Text>}
+              {savingGroup ? <Spinner size={18} color="#fff" /> : <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#fff', fontSize: 15 }}>Guardar cambios</Text>}
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -1014,7 +1019,7 @@ export const GroupDetailScreen = () => {
                                 style={{ paddingVertical: 2, paddingHorizontal: 4 }}
                               >
                                 {togglingSplitId === split.id ? (
-                                  <ActivityIndicator size="small" color={colors.brand} />
+                                  <Spinner size="small" color={colors.brand} />
                                 ) : (
                                   <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.brand }}>
                                     {split.isPaid ? 'Marcar pendiente' : 'Marcar pagado'}
@@ -1044,7 +1049,7 @@ export const GroupDetailScreen = () => {
                           >
                             {togglingSplitId === split.id ? (
                               <View style={{ flex: 1, alignItems: 'center', paddingVertical: 4 }}>
-                                <ActivityIndicator size="small" color={colors.brand} />
+                                <Spinner size="small" color={colors.brand} />
                               </View>
                             ) : (
                               <>
@@ -1229,7 +1234,7 @@ export const GroupDetailScreen = () => {
                 style={{ marginTop: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14, borderWidth: 1.5, borderColor: '#EF444430', backgroundColor: isDark ? '#EF444415' : '#FEF2F2' }}
               >
                 {leavingGroup ? (
-                  <ActivityIndicator color="#EF4444" />
+                  <Spinner size={18} color="#EF4444" />
                 ) : (
                   <>
                     <LogOut size={16} color="#EF4444" />

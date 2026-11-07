@@ -1,11 +1,10 @@
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  ActivityIndicator,
   Modal,
   Pressable,
   Platform,
@@ -19,6 +18,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { Info, X, ChevronLeft, ChevronRight, ChevronDown, AlertCircle, RefreshCw } from 'lucide-react-native';
 import { formatCurrency, formatAmount } from '../../utils/currency';
 import { getRateMeta, formatForeignAmount } from '../../utils/exchangeRates';
+import { registerDashboardRefresh, wasDashboardJustSynced } from '../../utils/syncEvents';
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -95,8 +95,6 @@ export const DashboardScreen = () => {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const hasLoadedOnceRef = useRef(false);
   const [tooltipTx, setTooltipTx] = useState<Transaction | null>(null);
   const [showForeignPrimary, setShowForeignPrimary] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -123,12 +121,9 @@ export const DashboardScreen = () => {
   };
   const isCurrentMonth = currentMonth === now.getMonth() + 1 && currentYear === now.getFullYear();
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     const fetchId = ++activeFetchIdRef.current;
     setHasError(false);
-    if (hasLoadedOnceRef.current) {
-      setIsUpdating(true);
-    }
     try {
       const [summaryRes, txRes, budgetRes] = await Promise.all([
         apiClient.get(`/transactions/summary?month=${currentMonth}&year=${currentYear}`),
@@ -139,7 +134,6 @@ export const DashboardScreen = () => {
       setSummary(summaryRes.data);
       setTransactions(txRes.data);
       setBudgets(budgetRes.data);
-      hasLoadedOnceRef.current = true;
     } catch (e) {
       if (fetchId !== activeFetchIdRef.current) return;
       console.error('Error cargando dashboard:', e);
@@ -148,15 +142,19 @@ export const DashboardScreen = () => {
       if (fetchId === activeFetchIdRef.current) {
         setLoading(false);
         setRefreshing(false);
-        setIsUpdating(false);
       }
     }
-  };
+  }, [currentMonth, currentYear]);
+
+  useEffect(() => {
+    return registerDashboardRefresh(fetchData);
+  }, [fetchData]);
 
   useFocusEffect(
     useCallback(() => {
+      if (wasDashboardJustSynced()) return;
       fetchData();
-    }, [currentMonth, currentYear]),
+    }, [fetchData]),
   );
 
   const onRefresh = () => {
@@ -425,26 +423,6 @@ export const DashboardScreen = () => {
 
         {/* Expenses list */}
         <View style={{ paddingHorizontal: 20, gap: 8 }}>
-          {isUpdating && !loading && (
-            <View
-              style={{
-                backgroundColor: colors.bgCard,
-                borderRadius: 14,
-                paddingVertical: 12,
-                paddingHorizontal: 16,
-                borderWidth: 1,
-                borderColor: `${colors.brand}30`,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 10,
-              }}
-            >
-              <ActivityIndicator size="small" color={colors.brand} />
-              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: colors.textSecondary }}>
-                Actualizando movimientos...
-              </Text>
-            </View>
-          )}
           {transactions.length === 0 ? (
             <View style={{ backgroundColor: colors.bgCard, borderRadius: 14, padding: 24, alignItems: 'center' }}>
               <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: colors.textMuted }}>

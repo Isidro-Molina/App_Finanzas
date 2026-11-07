@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
   Alert,
   Platform,
 } from 'react-native';
@@ -15,6 +14,8 @@ import { ArrowLeft, Calendar, Clock, Trash2, RefreshCw } from 'lucide-react-nati
 import { useTheme } from '../../context/ThemeContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { formatCurrency } from '../../utils/currency';
+import { Spinner } from '../../components/Spinner';
+import { awaitDashboardRefresh } from '../../utils/syncEvents';
 import {
   RATE_OPTIONS,
   RateOptionCode,
@@ -173,6 +174,7 @@ export const AddTransactionScreen: React.FC = () => {
             setDeleting(true);
             try {
               await apiClient.delete(`/transactions/${transaction.id}`);
+              await awaitDashboardRefresh();
               navigation.goBack();
             } catch (e: any) {
               const msg = e.response?.data?.message || 'Error al eliminar la transacción';
@@ -234,6 +236,7 @@ export const AddTransactionScreen: React.FC = () => {
       } else {
         await apiClient.post('/transactions', payload);
       }
+      await awaitDashboardRefresh();
       navigation.goBack();
     } catch (e: any) {
       const msg = e.response?.data?.message || 'Error al guardar la transacción';
@@ -278,7 +281,7 @@ export const AddTransactionScreen: React.FC = () => {
             style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: '#FEE2E2', borderWidth: 1, borderColor: '#FCA5A5', alignItems: 'center', justifyContent: 'center' }}
           >
             {deleting ? (
-              <ActivityIndicator size="small" color="#DC2626" />
+              <Spinner size={18} color="#DC2626" />
             ) : (
               <Trash2 size={18} color="#DC2626" />
             )}
@@ -569,7 +572,9 @@ export const AddTransactionScreen: React.FC = () => {
           </View>
 
           {fetchingCategories ? (
-            <ActivityIndicator color={colors.brand} style={{ marginVertical: 20 }} />
+            <View style={{ alignItems: 'center', marginVertical: 20 }}>
+              <Spinner size={24} color={colors.brand} />
+            </View>
           ) : filteredCategories.length === 0 ? (
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textMuted, textAlign: 'center', paddingVertical: 16 }}>
               No hay categorías. Creá una nueva con el botón de arriba.
@@ -703,7 +708,7 @@ export const AddTransactionScreen: React.FC = () => {
           >
             {loading ? (
               <>
-                <ActivityIndicator size="small" color="#fff" />
+                <Spinner size={18} color="#fff" />
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>
                   {isEditing ? 'Actualizando...' : 'Guardando gasto...'}
                 </Text>

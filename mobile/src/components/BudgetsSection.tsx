@@ -7,13 +7,13 @@ import {
   Pressable,
   TextInput,
   ScrollView,
-  ActivityIndicator,
   Alert,
 } from 'react-native';
 import { Plus, Trash2, X } from 'lucide-react-native';
 import apiClient from '../api/client';
 import { useTheme } from '../context/ThemeContext';
 import { formatCurrency } from '../utils/currency';
+import { Spinner } from './Spinner';
 
 export interface BudgetItem {
   id: string;
@@ -195,7 +195,7 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
             />
 
             <TouchableOpacity onPress={handleSave} disabled={saving} style={{ width: '100%', paddingVertical: 14, backgroundColor: colors.brand, borderRadius: 14, alignItems: 'center' }}>
-              {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' }}>Guardar límite</Text>}
+              {saving ? <Spinner size={18} color="#fff" /> : <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' }}>Guardar límite</Text>}
             </TouchableOpacity>
           </Pressable>
         </Pressable>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Spinner } from '../../components/Spinner';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -162,7 +163,7 @@ export const LoginScreen = () => {
         {!isRegisterMode && googleEnabled && (
           <TouchableOpacity onPress={() => promptAsync()} disabled={!request || googleLoading} activeOpacity={0.8} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: colors.bgCard, borderWidth: 1.5, borderColor: colors.border, borderRadius: 14, paddingVertical: 14, marginBottom: 16 }}>
             {googleLoading ? (
-              <ActivityIndicator color={colors.brand} />
+              <Spinner size={18} color={colors.brand} />
             ) : (
               <>
                 {/* Google "G" logo */}
@@ -209,14 +210,14 @@ export const LoginScreen = () => {
 
           {/* Submit */}
           <TouchableOpacity onPress={handleSubmit} disabled={loading} activeOpacity={0.8} style={{ marginTop: 8, backgroundColor: colors.brand, borderRadius: 14, paddingVertical: 17, alignItems: 'center', justifyContent: 'center', shadowColor: colors.brand, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 4 }}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>{isRegisterMode ? 'Crear Cuenta' : 'Iniciar Sesión'}</Text>}
+            {loading ? <Spinner size={18} color="#fff" /> : <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>{isRegisterMode ? 'Crear Cuenta' : 'Iniciar Sesión'}</Text>}
           </TouchableOpacity>
 
           {/* Biometric */}
           {!isRegisterMode && showBioButton && (
             <TouchableOpacity onPress={handleBiometricLogin} disabled={bioLoading} activeOpacity={0.8} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: colors.brandLight, borderWidth: 1.5, borderColor: colors.brand, borderRadius: 14, paddingVertical: 14 }}>
               {bioLoading ? (
-                <ActivityIndicator color={colors.brand} />
+                <Spinner size={18} color={colors.brand} />
               ) : (
                 <>
                   <Fingerprint size={20} color={colors.brand} />

@@ -5,13 +5,13 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
   Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import apiClient from '../../api/client';
 import { ArrowLeft, Check } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { Spinner } from '../../components/Spinner';
 
 const COLOR_OPTIONS = [
   '#2563EB', // Azul
@@ -194,7 +194,7 @@ export const AddCategoryScreen: React.FC = () => {
           }}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" />
+            <Spinner size={18} color="#fff" />
           ) : (
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>
               Crear Categoría

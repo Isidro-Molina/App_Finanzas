@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
   Alert,
   Platform,
 } from 'react-native';
@@ -15,6 +14,8 @@ import { ArrowLeft, Calendar, Clock, Users, Check, RefreshCw } from 'lucide-reac
 import { useTheme } from '../../context/ThemeContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { formatCurrency } from '../../utils/currency';
+import { Spinner } from '../../components/Spinner';
+import { awaitGroupDetailRefresh } from '../../utils/syncEvents';
 import {
   RATE_OPTIONS,
   RateOptionCode,
@@ -224,7 +225,8 @@ export const AddGroupExpenseScreen: React.FC = () => {
         categoryId: selectedCategoryId || undefined,
         splits,
       });
-      navigation.navigate('GroupDetail', { groupId, refreshTimestamp: Date.now() });
+      await awaitGroupDetailRefresh(groupId);
+      navigation.goBack();
     } catch (e: any) {
       const msg = e.response?.data?.message || 'Error al agregar el gasto al grupo';
       Alert.alert('Error', Array.isArray(msg) ? msg[0] : msg);
@@ -605,7 +607,9 @@ export const AddGroupExpenseScreen: React.FC = () => {
           </View>
 
           {loadingMembers ? (
-            <ActivityIndicator color={colors.brand} />
+            <View style={{ alignItems: 'center', paddingVertical: 12 }}>
+              <Spinner size={22} color={colors.brand} />
+            </View>
           ) : (
             <View style={{ gap: 12 }}>
               {participants.map((p, i) => {
@@ -677,7 +681,7 @@ export const AddGroupExpenseScreen: React.FC = () => {
         >
           {loading ? (
             <>
-              <ActivityIndicator size="small" color="#fff" />
+              <Spinner size={18} color="#fff" />
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>
                 Guardando gasto...
               </Text>
