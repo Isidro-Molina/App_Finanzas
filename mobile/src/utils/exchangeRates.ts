@@ -186,3 +186,4 @@ export async function fetchExchangeRates(): Promise<Record<string, ExchangeRateI
     return {};
   }
 }
+

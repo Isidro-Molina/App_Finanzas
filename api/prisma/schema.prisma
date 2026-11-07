@@ -183,9 +183,10 @@ model GroupExpense {
 
 // Cómo se divide ese ticket (Ej: Pedro debe $2.500, María debe $2.500)
 model ExpenseSplit {
-  id         String  @id @default(uuid())
-  amountOwed Decimal @db.Decimal(12, 2) // ← Decimal
-  isPaid     Boolean @default(false)    // ← Para marcar pagos individuales dentro del grupo
+  id           String  @id @default(uuid())
+  amountOwed   Decimal @db.Decimal(12, 2) // ← Monto adeudado en ARS
+  isPaid       Boolean @default(false)    // ← Para marcar pagos individuales dentro del grupo
+  paidCurrency String?                    // ← "ARS" | "USD" | "EUR": moneda en la que se saldó el split
 
   groupExpenseId String
   groupExpense   GroupExpense @relation(fields: [groupExpenseId], references: [id], onDelete: Cascade)

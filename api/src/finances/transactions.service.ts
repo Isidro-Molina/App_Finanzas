@@ -206,7 +206,7 @@ export class TransactionsService {
           where: { id: split.id },
           data: {
             transactionId: null,
-            ...(isPayerOwnSplit ? {} : { isPaid: false }),
+            ...(isPayerOwnSplit ? {} : { isPaid: false, paidCurrency: null }),
           },
         });
       }

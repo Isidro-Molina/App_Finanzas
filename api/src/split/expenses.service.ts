@@ -164,6 +164,12 @@ export class ExpensesService {
             create: splitsData.map((s) => ({
               ...s,
               isPaid: s.userId === userId || parseFloat(s.amountOwed) <= 0,
+              paidCurrency:
+                s.userId === userId
+                  ? isForeignCurrency
+                    ? (dto.currency ?? 'ARS')
+                    : 'ARS'
+                  : null,
             })),
           },
         },
@@ -280,6 +286,7 @@ export class ExpensesService {
     groupId: string,
     expenseId: string,
     splitId: string,
+    paidCurrency?: 'ARS' | 'USD' | 'EUR',
   ) {
     await this.assertMember(userId, groupId);
 
@@ -332,6 +339,12 @@ export class ExpensesService {
     }
 
     const willBePaid = !split.isPaid;
+    const expCurrency = split.groupExpense.currency || 'ARS';
+    const resolvedPaidCurrency = willBePaid
+      ? expCurrency !== 'ARS'
+        ? (paidCurrency ?? expCurrency)
+        : 'ARS'
+      : null;
 
     return this.prisma.$transaction(async (tx) => {
       let transactionId = split.transactionId;
@@ -373,17 +386,18 @@ export class ExpensesService {
 
         const debtorAmountOwed = parseFloat(String(split.amountOwed));
         if (targetCategoryId && debtorAmountOwed > 0) {
-          const expCurrency = split.groupExpense.currency || 'ARS';
           const expRate = split.groupExpense.exchangeRate
             ? parseFloat(String(split.groupExpense.exchangeRate))
             : null;
           const isForeign = expCurrency !== 'ARS' && expRate && expRate > 0;
+          const paidInForeign =
+            isForeign && resolvedPaidCurrency && resolvedPaidCurrency !== 'ARS';
 
           const personalTx = await tx.transaction.create({
             data: {
               userId: split.userId,
               amount: split.amountOwed,
-              currency: isForeign ? expCurrency : 'ARS',
+              currency: paidInForeign ? expCurrency : 'ARS',
               originalAmount: isForeign
                 ? (debtorAmountOwed / expRate).toFixed(2)
                 : null,
@@ -391,7 +405,9 @@ export class ExpensesService {
               rateType: isForeign ? split.groupExpense.rateType : null,
               type: 'EXPENSE',
               categoryId: targetCategoryId,
-              description: `${split.groupExpense.description} (${split.groupExpense.group.name})`,
+              description: isForeign
+                ? `${split.groupExpense.description} (${split.groupExpense.group.name} · Pagado en ${resolvedPaidCurrency})`
+                : `${split.groupExpense.description} (${split.groupExpense.group.name})`,
               date: new Date(),
             },
           });
@@ -411,6 +427,7 @@ export class ExpensesService {
         where: { id: splitId },
         data: {
           isPaid: willBePaid,
+          paidCurrency: resolvedPaidCurrency,
           transactionId,
         },
         include: { user: { select: { id: true, name: true, email: true } } },

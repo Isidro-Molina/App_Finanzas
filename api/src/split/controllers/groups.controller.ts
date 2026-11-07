@@ -22,6 +22,7 @@ import { AddMemberDto } from '../dto/add-member.dto';
 import { SetMemberRoleDto } from '../dto/set-member-role.dto';
 import { SuggestMemberDto } from '../dto/suggest-member.dto';
 import { AddExpenseDto } from '../dto/add-expense.dto';
+import { ToggleSplitPaidDto } from '../dto/toggle-split-paid.dto';
 
 type AuthReq = { user: { userId: string } };
 
@@ -206,12 +207,14 @@ export class GroupsController {
     @Param('id') groupId: string,
     @Param('expenseId') expenseId: string,
     @Param('splitId') splitId: string,
+    @Body() dto?: ToggleSplitPaidDto,
   ) {
     return this.expensesService.toggleSplitPaid(
       req.user.userId,
       groupId,
       expenseId,
       splitId,
+      dto?.paidCurrency,
     );
   }
 

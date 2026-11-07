@@ -154,4 +154,56 @@ describe('AuthService - Autenticación y recuperación de cuenta', () => {
       ).rejects.toThrow(BadRequestException);
     });
   });
+
+  describe('googleAuth - Verificación de email (AUD-04) y normalización (AUD-14)', () => {
+    it('debe rechazar el login con Google si email_verified es false', async () => {
+      (service as any).googleClient = {
+        verifyIdToken: jest.fn().mockResolvedValue({
+          getPayload: () => ({
+            email: 'unverified@finova.com',
+            email_verified: false,
+            name: 'Unverified User',
+          }),
+        }),
+      };
+
+      await expect(
+        service.googleAuth({ idToken: 'fake-id-token' }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('debe normalizar el email de Google a minúsculas y crear usuario si no existe', async () => {
+      (service as any).googleClient = {
+        verifyIdToken: jest.fn().mockResolvedValue({
+          getPayload: () => ({
+            email: '  Isidro.Molina@Finova.com ',
+            email_verified: true,
+            name: 'Isidro Molina',
+          }),
+        }),
+      };
+      mockUsersService.findByEmail.mockResolvedValue(null);
+      mockPrisma.user.create.mockResolvedValue({
+        id: 'user-google-1',
+        email: 'isidro.molina@finova.com',
+        name: 'Isidro Molina',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const res = await service.googleAuth({ idToken: 'valid-id-token' });
+
+      expect(mockUsersService.findByEmail).toHaveBeenCalledWith(
+        'isidro.molina@finova.com',
+      );
+      expect(mockPrisma.user.create).toHaveBeenCalledWith({
+        data: {
+          email: 'isidro.molina@finova.com',
+          name: 'Isidro Molina',
+          passwordHash: '',
+        },
+      });
+      expect(res.accessToken).toBe('mock-jwt-token');
+    });
+  });
 });
