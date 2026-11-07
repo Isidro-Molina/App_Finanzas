@@ -90,7 +90,6 @@ export const DashboardScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [tooltipTx, setTooltipTx] = useState<Transaction | null>(null);
-  const [showForeignPrimary, setShowForeignPrimary] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
@@ -391,28 +390,11 @@ export const DashboardScreen = () => {
           onChanged={fetchData}
         />
 
-        {/* Expenses header — con opción de alternar vista ARS / USD cuando hay gastos en moneda extranjera */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        {/* Expenses header */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 }}>
           <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: colors.textPrimary }}>
             Últimos Gastos
           </Text>
-          {transactions.some((t) => t.currency && t.currency !== 'ARS' && t.originalAmount) && (
-            <TouchableOpacity
-              onPress={() => setShowForeignPrimary((v) => !v)}
-              style={{
-                backgroundColor: colors.brandLight,
-                paddingHorizontal: 10,
-                paddingVertical: 4,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: `${colors.brand}30`,
-              }}
-            >
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.brand }}>
-                {showForeignPrimary ? 'Ver en Pesos ($)' : 'Ver en USD / EUR'}
-              </Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* Expenses list */}
@@ -497,26 +479,13 @@ export const DashboardScreen = () => {
                   </View>
 
                   <View style={{ alignItems: 'flex-end' }}>
-                    {isForeign && showForeignPrimary ? (
-                      <>
-                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: isIncome ? colors.income : colors.expense }}>
-                          {isIncome ? '+' : '-'}{formatForeignAmount(tx.originalAmount, tx.currency)}
-                        </Text>
-                        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
-                          ${formatAmount(Math.abs(Number(tx.amount)))} ARS
-                        </Text>
-                      </>
-                    ) : (
-                      <>
-                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: isIncome ? colors.income : colors.expense }}>
-                          {isIncome ? '+' : '-'}${formatAmount(Math.abs(Number(tx.amount)))}
-                        </Text>
-                        {isForeign && (
-                          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: colors.brand, marginTop: 2 }}>
-                            {formatForeignAmount(tx.originalAmount, tx.currency)}
-                          </Text>
-                        )}
-                      </>
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: isIncome ? colors.income : colors.expense }}>
+                      {isIncome ? '+' : '-'}${formatAmount(Math.abs(Number(tx.amount)))}
+                    </Text>
+                    {isForeign && (
+                      <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: colors.brand, marginTop: 2 }}>
+                        {formatForeignAmount(tx.originalAmount, tx.currency)}
+                      </Text>
                     )}
                   </View>
                 </TouchableOpacity>

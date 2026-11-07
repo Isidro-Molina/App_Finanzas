@@ -12,7 +12,7 @@ const PALETTE = [
 ];
 
 const FIXED_CATEGORY_COLORS: Record<string, string> = {
-  comida: '#2563EB',
+  comida: '#F97316',
   otros: '#7C3AED',
   salidas: '#DB2777',
   servicios: '#059669',
@@ -24,7 +24,7 @@ const FIXED_CATEGORY_COLORS: Record<string, string> = {
   hogar: '#65A30D',
   ropa: '#9333EA',
   entretenimiento: '#DB2777',
-  supermercado: '#2563EB',
+  supermercado: '#F97316',
 };
 
 /**
@@ -55,3 +55,4 @@ export function getCategoryColor(
 
   return PALETTE[0];
 }
+
