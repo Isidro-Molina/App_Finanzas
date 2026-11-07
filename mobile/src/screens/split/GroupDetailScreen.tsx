@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -109,6 +109,7 @@ export const GroupDetailScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
 
   // Modal invitar / sugerir miembro
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
@@ -136,7 +137,7 @@ export const GroupDetailScreen = () => {
   const isAdmin = currentMember?.role === 'ADMIN';
 
   const fetchData = async (showLoadingOverlay = false) => {
-    if (showLoadingOverlay) setIsUpdating(true);
+    if (showLoadingOverlay || hasLoadedOnceRef.current) setIsUpdating(true);
     try {
       const [groupRes, expRes, balRes] = await Promise.all([
         apiClient.get(`/groups/${groupId}`),
@@ -146,6 +147,7 @@ export const GroupDetailScreen = () => {
       setGroup(groupRes.data);
       setExpenses(expRes.data);
       setBalance(balRes.data);
+      hasLoadedOnceRef.current = true;
 
       // Si el modal de detalle de gasto está abierto, actualizarlo con la info nueva
       if (selectedExpense) {

@@ -699,10 +699,15 @@ export const AddTransactionScreen: React.FC = () => {
             onPress={handleSubmit}
             disabled={loading}
             activeOpacity={0.8}
-            style={{ width: '100%', backgroundColor: colors.brand, borderRadius: 14, paddingVertical: 17, alignItems: 'center', justifyContent: 'center', shadowColor: colors.brand, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 4 }}
+            style={{ width: '100%', backgroundColor: colors.brand, opacity: loading ? 0.85 : 1, borderRadius: 14, paddingVertical: 17, flexDirection: 'row', gap: 10, alignItems: 'center', justifyContent: 'center', shadowColor: colors.brand, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 4 }}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>
+                  {isEditing ? 'Actualizando...' : 'Guardando gasto...'}
+                </Text>
+              </>
             ) : (
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>
                 {isEditing ? 'Actualizar Transacción' : 'Guardar Transacción'}
