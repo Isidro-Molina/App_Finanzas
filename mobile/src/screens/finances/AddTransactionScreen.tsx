@@ -316,18 +316,117 @@ export const AddTransactionScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Amount + Currency / Exchange Rate Selector */}
-        <View style={{ ...cardStyle, paddingTop: 18, paddingBottom: 22, paddingHorizontal: 18, alignItems: 'center' }}>
-          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Moneda / Cotización
-          </Text>
+        {/* Amount + Currency / Exchange Rate Card */}
+        <View style={{ ...cardStyle, padding: 18 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 14, color: colors.textPrimary }}>
+              Monto
+            </Text>
+            {rateOption !== 'ARS' && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  backgroundColor: colors.bgInput,
+                  borderRadius: 8,
+                  padding: 2,
+                  borderWidth: 1,
+                  borderColor: colors.borderSubtle,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={() => setInputInArs(false)}
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 6,
+                    backgroundColor: !inputInArs ? colors.brand : 'transparent',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: 'Inter_600SemiBold',
+                      fontSize: 11,
+                      color: !inputInArs ? '#fff' : colors.textMuted,
+                    }}
+                  >
+                    En {activeRateMeta.currency}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setInputInArs(true)}
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 6,
+                    backgroundColor: inputInArs ? colors.brand : 'transparent',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: 'Inter_600SemiBold',
+                      fontSize: 11,
+                      color: inputInArs ? '#fff' : colors.textMuted,
+                    }}
+                  >
+                    En ARS
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
 
-          {/* Horizontal Rate Selector Pills */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8, paddingBottom: 14 }}
+          {/* Structured Amount Input Box */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: colors.bgInput,
+              borderWidth: 1.5,
+              borderColor: colors.border,
+              borderRadius: 14,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              marginBottom: 14,
+            }}
           >
+            <View
+              style={{
+                backgroundColor: colors.brandLight,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 8,
+                marginRight: 12,
+                borderWidth: 1,
+                borderColor: `${colors.brand}25`,
+              }}
+            >
+              <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 14, color: colors.brand }}>
+                {rateOption === 'ARS' || inputInArs ? 'ARS $' : activeRateMeta.symbol}
+              </Text>
+            </View>
+            <TextInput
+              value={amount}
+              onChangeText={setAmount}
+              placeholder="0,00"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="decimal-pad"
+              autoFocus
+              style={{
+                flex: 1,
+                fontFamily: 'Outfit_700Bold',
+                fontSize: 28,
+                color: colors.textPrimary,
+                textAlign: 'right',
+                padding: 0,
+              }}
+            />
+          </View>
+
+          {/* Currency / Rate Type Tags (wrapped grid matching Categories) */}
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Cotización
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {RATE_OPTIONS.map((opt) => {
               const isSelected = rateOption === opt.code;
               const liveQuote = opt.code !== 'ARS' ? ratesMap[opt.code]?.sell : null;
@@ -338,18 +437,18 @@ export const AddTransactionScreen: React.FC = () => {
                   style={{
                     paddingHorizontal: 12,
                     paddingVertical: 7,
-                    borderRadius: 12,
+                    borderRadius: 10,
                     borderWidth: 1.5,
                     borderColor: isSelected ? colors.brand : colors.border,
                     backgroundColor: isSelected ? colors.brandLight : colors.bgInput,
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 6,
+                    gap: 5,
                   }}
                 >
                   <Text
                     style={{
-                      fontFamily: isSelected ? 'Inter_600SemiBold' : 'Inter_500Medium',
+                      fontFamily: isSelected ? 'Inter_600SemiBold' : 'Inter_400Regular',
                       fontSize: 12,
                       color: isSelected ? colors.brand : colors.textSecondary,
                     }}
@@ -359,7 +458,7 @@ export const AddTransactionScreen: React.FC = () => {
                   {liveQuote ? (
                     <Text
                       style={{
-                        fontFamily: 'Inter_400Regular',
+                        fontFamily: 'Inter_500Medium',
                         fontSize: 11,
                         color: isSelected ? colors.brand : colors.textMuted,
                       }}
@@ -370,98 +469,15 @@ export const AddTransactionScreen: React.FC = () => {
                 </TouchableOpacity>
               );
             })}
-          </ScrollView>
-
-          {rateOption !== 'ARS' && (
-            <View
-              style={{
-                flexDirection: 'row',
-                backgroundColor: colors.bgInput,
-                borderRadius: 10,
-                padding: 3,
-                marginBottom: 12,
-                width: '100%',
-                borderWidth: 1,
-                borderColor: colors.borderSubtle,
-              }}
-            >
-              <TouchableOpacity
-                onPress={() => setInputInArs(false)}
-                style={{
-                  flex: 1,
-                  paddingVertical: 7,
-                  borderRadius: 8,
-                  alignItems: 'center',
-                  backgroundColor: !inputInArs ? colors.bgCard : 'transparent',
-                }}
-              >
-                <Text
-                  style={{
-                    fontFamily: !inputInArs ? 'Inter_600SemiBold' : 'Inter_500Medium',
-                    fontSize: 12,
-                    color: !inputInArs ? colors.brand : colors.textMuted,
-                  }}
-                >
-                  Ingresar en {activeRateMeta.currency}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setInputInArs(true)}
-                style={{
-                  flex: 1,
-                  paddingVertical: 7,
-                  borderRadius: 8,
-                  alignItems: 'center',
-                  backgroundColor: inputInArs ? colors.bgCard : 'transparent',
-                }}
-              >
-                <Text
-                  style={{
-                    fontFamily: inputInArs ? 'Inter_600SemiBold' : 'Inter_500Medium',
-                    fontSize: 12,
-                    color: inputInArs ? colors.brand : colors.textMuted,
-                  }}
-                >
-                  Ingresar en Pesos (ARS)
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Monto ({rateOption === 'ARS' || inputInArs ? 'ARS' : activeRateMeta.currency})
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: rateOption === 'ARS' || inputInArs ? 26 : 20, color: colors.textMuted, marginRight: 6 }}>
-              {rateOption === 'ARS' || inputInArs ? '$' : activeRateMeta.symbol}
-            </Text>
-            <TextInput
-              value={amount}
-              onChangeText={setAmount}
-              placeholder="0"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="decimal-pad"
-              autoFocus
-              style={{
-                fontFamily: 'Outfit_800ExtraBold',
-                fontSize: 52,
-                color: colors.textPrimary,
-                letterSpacing: -1,
-                minWidth: 100,
-                textAlign: 'center',
-                padding: 0,
-              }}
-            />
           </View>
 
           {/* Live Exchange Rate & Bidirectional Conversion Box when non-ARS is selected */}
           {rateOption !== 'ARS' && (
             <View
               style={{
-                width: '100%',
                 marginTop: 14,
                 padding: 12,
-                borderRadius: 14,
+                borderRadius: 12,
                 backgroundColor: colors.bgInput,
                 borderWidth: 1,
                 borderColor: `${colors.brand}30`,
@@ -471,7 +487,7 @@ export const AddTransactionScreen: React.FC = () => {
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
                   <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: colors.textSecondary }}>
-                    Cotización {activeRateMeta.shortLabel}:
+                    TC {activeRateMeta.shortLabel}:
                   </Text>
                   <TouchableOpacity
                     onPress={() => loadRates(rateOption)}
@@ -489,8 +505,8 @@ export const AddTransactionScreen: React.FC = () => {
                     borderWidth: 1,
                     borderColor: colors.border,
                     borderRadius: 8,
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
                   }}
                 >
                   <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.textMuted, marginRight: 2 }}>
@@ -519,7 +535,7 @@ export const AddTransactionScreen: React.FC = () => {
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  paddingTop: 6,
+                  paddingTop: 8,
                   borderTopWidth: 1,
                   borderTopColor: colors.borderSubtle,
                 }}
