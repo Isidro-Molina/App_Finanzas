@@ -55,6 +55,7 @@ export class TransactionsService {
 
     let totalIncome = 0;
     let totalExpense = 0;
+    let expenseCount = 0;
     const byCategory: Record<
       string,
       { name: string; icon: string | null; total: number; type: string }
@@ -62,8 +63,12 @@ export class TransactionsService {
 
     for (const tx of transactions) {
       const amount = Number(tx.amount);
-      if (tx.type === 'INCOME') totalIncome += amount;
-      else totalExpense += amount;
+      if (tx.type === 'INCOME') {
+        totalIncome += amount;
+      } else {
+        totalExpense += amount;
+        expenseCount += 1;
+      }
 
       const key = tx.categoryId || 'unknown';
       if (!byCategory[key]) {
@@ -83,6 +88,7 @@ export class TransactionsService {
       totalIncome: +totalIncome.toFixed(2),
       totalExpense: +totalExpense.toFixed(2),
       balance: +(totalIncome - totalExpense).toFixed(2),
+      expenseCount,
       byCategory: Object.values(byCategory).sort((a, b) => b.total - a.total),
     };
   }
