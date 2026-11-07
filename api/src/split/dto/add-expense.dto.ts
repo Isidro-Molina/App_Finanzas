@@ -1,11 +1,13 @@
 import {
   IsArray,
   IsDateString,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -28,7 +30,26 @@ export class AddExpenseDto {
 
   @IsPositiveDecimal()
   @IsNotEmpty()
-  amount: string; // Monto total del gasto
+  amount: string; // Monto total del gasto en ARS
+
+  @IsOptional()
+  @IsIn(['ARS', 'USD', 'EUR'])
+  currency?: string;
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined)
+  @IsPositiveDecimal()
+  originalAmount?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined)
+  @IsPositiveDecimal()
+  exchangeRate?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined)
+  @IsIn(['TARJETA', 'BLUE', 'MEP', 'OFICIAL', 'EUR', 'CUSTOM'])
+  rateType?: string | null;
 
   @IsOptional()
   @IsDateString()

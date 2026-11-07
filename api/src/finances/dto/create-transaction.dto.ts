@@ -1,6 +1,7 @@
 import {
   IsDateString,
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -14,7 +15,28 @@ import { IsPositiveDecimal } from 'src/common/validators/is-positive-decimal.dec
 export class CreateTransactionDto {
   @IsPositiveDecimal()
   @IsNotEmpty({ message: 'El monto es requerido' })
-  amount: string; // Llega como string, Prisma lo convierte a Decimal
+  amount: string; // Monto final en ARS (Prisma lo convierte a Decimal)
+
+  @IsOptional()
+  @IsIn(['ARS', 'USD', 'EUR'], {
+    message: 'currency debe ser ARS, USD o EUR',
+  })
+  currency?: string;
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined)
+  @IsPositiveDecimal()
+  originalAmount?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined)
+  @IsPositiveDecimal()
+  exchangeRate?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined)
+  @IsIn(['TARJETA', 'BLUE', 'MEP', 'OFICIAL', 'EUR', 'CUSTOM'])
+  rateType?: string | null;
 
   @IsEnum(TransactionType, { message: 'type debe ser INCOME o EXPENSE' })
   type: TransactionType;

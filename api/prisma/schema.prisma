@@ -76,12 +76,16 @@ model Category {
 }
 
 model Transaction {
-  id          String          @id @default(uuid())
-  amount      Decimal         @db.Decimal(12, 2) // ← Decimal para cálculos exactos de dinero
-  description String?
-  type        TransactionType // Redundante con Category.type pero simplifica queries de balance
-  date        DateTime        @default(now())
-  createdAt   DateTime        @default(now())
+  id             String          @id @default(uuid())
+  amount         Decimal         @db.Decimal(12, 2) // ← Monto final en ARS para cálculos exactos de balance
+  currency       String          @default("ARS")    // "ARS" | "USD" | "EUR"
+  originalAmount Decimal?        @db.Decimal(12, 2) // Monto en moneda extranjera (ej: 20.00 USD)
+  exchangeRate   Decimal?        @db.Decimal(12, 2) // Cotización aplicada (ej: 1650.00)
+  rateType       String?                            // "TARJETA" | "BLUE" | "MEP" | "OFICIAL" | "EUR" | "CUSTOM"
+  description    String?
+  type           TransactionType // Redundante con Category.type pero simplifica queries de balance
+  date           DateTime        @default(now())
+  createdAt      DateTime        @default(now())
 
   userId     String
   user       User     @relation(fields: [userId], references: [id])
@@ -152,10 +156,14 @@ model GroupMember {
 
 // El ticket o recibo general (Ej: Juan pagó $10.000 de asado)
 model GroupExpense {
-  id          String   @id @default(uuid())
-  description String   // Ej: "Carnicería"
-  amount      Decimal  @db.Decimal(12, 2) // ← Decimal
-  date        DateTime @default(now())
+  id             String   @id @default(uuid())
+  description    String   // Ej: "Carnicería"
+  amount         Decimal  @db.Decimal(12, 2) // ← Monto total en ARS
+  currency       String   @default("ARS")    // "ARS" | "USD" | "EUR"
+  originalAmount Decimal? @db.Decimal(12, 2) // Monto original en USD/EUR si aplica
+  exchangeRate   Decimal? @db.Decimal(12, 2) // Cotización aplicada
+  rateType       String?                     // "TARJETA" | "BLUE" | "MEP" | "OFICIAL" | "EUR" | "CUSTOM"
+  date           DateTime @default(now())
 
   groupId  String
   group    Group  @relation(fields: [groupId], references: [id])

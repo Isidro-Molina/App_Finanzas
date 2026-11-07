@@ -225,4 +225,3 @@ describe('ExpensesService - Reglas de negocio y categorías grupales', () => {
     });
   });
 });
-

@@ -39,6 +39,7 @@ import {
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency } from '../../utils/currency';
+import { getRateMeta, formatForeignAmount } from '../../utils/exchangeRates';
 
 interface Member {
   userId: string;
@@ -69,6 +70,10 @@ interface Expense {
   id: string;
   description: string;
   amount: string;
+  currency?: string;
+  originalAmount?: string | number | null;
+  exchangeRate?: string | number | null;
+  rateType?: string | null;
   date: string;
   paidById?: string;
   paidBy: { id: string; name: string };
@@ -563,6 +568,8 @@ export const GroupDetailScreen = () => {
             ) : (
               expenses.map((exp) => {
                 const isMe = exp.paidBy.id === user?.id;
+                const isForeign = Boolean(exp.currency && exp.currency !== 'ARS' && exp.originalAmount);
+                const rateMeta = isForeign ? getRateMeta(exp.rateType, exp.currency) : null;
                 return (
                   <TouchableOpacity
                     key={exp.id}
@@ -571,12 +578,28 @@ export const GroupDetailScreen = () => {
                     style={{ backgroundColor: colors.bgCard, borderRadius: 14, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: isDark ? 0.2 : 0.05, shadowRadius: 3, elevation: 1 }}
                   >
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.textPrimary, flex: 1, marginRight: 12 }}>
-                        {exp.description}
-                      </Text>
-                      <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: colors.brand }}>
-                        {formatCurrency(exp.amount)}
-                      </Text>
+                      <View style={{ flex: 1, marginRight: 12 }}>
+                        {isForeign && rateMeta && (
+                          <View style={{ alignSelf: 'flex-start', backgroundColor: colors.brandLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginBottom: 4, borderWidth: 1, borderColor: `${colors.brand}25` }}>
+                            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: colors.brand }}>
+                              {rateMeta.badge} · {formatForeignAmount(exp.originalAmount, exp.currency)}
+                            </Text>
+                          </View>
+                        )}
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.textPrimary }}>
+                          {exp.description}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: colors.brand }}>
+                          {formatCurrency(exp.amount)}
+                        </Text>
+                        {isForeign && exp.exchangeRate ? (
+                          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: colors.textMuted, marginTop: 1 }}>
+                            TC ${Math.round(Number(exp.exchangeRate)).toLocaleString('es-AR')}
+                          </Text>
+                        ) : null}
+                      </View>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                       <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>
@@ -853,19 +876,34 @@ export const GroupDetailScreen = () => {
                 </View>
 
                 {/* Tarjeta de resumen de pago */}
-                <View style={{ backgroundColor: colors.bgInput, borderRadius: 16, padding: 14, marginBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View>
-                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>Monto total</Text>
-                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: colors.brand }}>
-                      {formatCurrency(selectedExpense.amount)}
-                    </Text>
+                <View style={{ backgroundColor: colors.bgInput, borderRadius: 16, padding: 14, marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View>
+                      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>Monto total (ARS)</Text>
+                      <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: colors.brand }}>
+                        {formatCurrency(selectedExpense.amount)}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>Pagado por</Text>
+                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.textPrimary }}>
+                        {selectedExpense.paidBy.id === user?.id ? 'Vos' : selectedExpense.paidBy.name}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>Pagado por</Text>
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.textPrimary }}>
-                      {selectedExpense.paidBy.id === user?.id ? 'Vos' : selectedExpense.paidBy.name}
-                    </Text>
-                  </View>
+
+                  {selectedExpense.currency && selectedExpense.currency !== 'ARS' && selectedExpense.originalAmount ? (
+                    <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.borderSubtle, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.brand }}>
+                        {getRateMeta(selectedExpense.rateType, selectedExpense.currency).badge}: {formatForeignAmount(selectedExpense.originalAmount, selectedExpense.currency)}
+                      </Text>
+                      {selectedExpense.exchangeRate ? (
+                        <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: colors.textMuted }}>
+                          Cotización: ${Number(selectedExpense.exchangeRate).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : null}
                 </View>
 
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.textSecondary, marginBottom: 10 }}>

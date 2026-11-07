@@ -112,6 +112,19 @@ export class TransactionsService {
       data: {
         userId,
         amount: dto.amount,
+        currency: dto.currency || 'ARS',
+        originalAmount:
+          dto.currency && dto.currency !== 'ARS'
+            ? (dto.originalAmount ?? null)
+            : null,
+        exchangeRate:
+          dto.currency && dto.currency !== 'ARS'
+            ? (dto.exchangeRate ?? null)
+            : null,
+        rateType:
+          dto.currency && dto.currency !== 'ARS'
+            ? (dto.rateType ?? null)
+            : null,
         type: dto.type,
         categoryId: dto.categoryId,
         description: dto.description,
@@ -155,6 +168,14 @@ export class TransactionsService {
       where: { id },
       data: {
         ...(dto.amount && { amount: dto.amount }),
+        ...(dto.currency !== undefined && { currency: dto.currency }),
+        ...(dto.originalAmount !== undefined && {
+          originalAmount: dto.originalAmount,
+        }),
+        ...(dto.exchangeRate !== undefined && {
+          exchangeRate: dto.exchangeRate,
+        }),
+        ...(dto.rateType !== undefined && { rateType: dto.rateType }),
         ...(dto.type && { type: dto.type }),
         ...(dto.categoryId && { categoryId: dto.categoryId }),
         ...(dto.description !== undefined && { description: dto.description }),

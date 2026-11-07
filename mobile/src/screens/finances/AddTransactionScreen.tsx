@@ -11,9 +11,17 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import apiClient from '../../api/client';
-import { ArrowLeft, Calendar, Clock, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, Calendar, Clock, Trash2, RefreshCw } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { formatCurrency } from '../../utils/currency';
+import {
+  RATE_OPTIONS,
+  RateOptionCode,
+  ExchangeRateItem,
+  fetchExchangeRates,
+  getRateMeta,
+} from '../../utils/exchangeRates';
 
 interface Category {
   id: string;
@@ -36,11 +44,30 @@ export const AddTransactionScreen: React.FC = () => {
   const transaction = route.params?.transaction;
   const isEditing = Boolean(transaction?.id);
 
+  const initialRateCode: RateOptionCode =
+    transaction?.rateType && RATE_OPTIONS.some((r) => r.code === transaction.rateType)
+      ? (transaction.rateType as RateOptionCode)
+      : transaction?.currency === 'EUR'
+        ? 'EUR'
+        : transaction?.currency === 'USD'
+          ? 'TARJETA'
+          : 'ARS';
+
   const [type, setType] = useState<'EXPENSE' | 'INCOME'>(
     transaction?.type === 'INCOME' ? 'INCOME' : 'EXPENSE'
   );
+  const [rateOption, setRateOption] = useState<RateOptionCode>(initialRateCode);
+  const [ratesMap, setRatesMap] = useState<Record<string, ExchangeRateItem>>({});
+  const [loadingRates, setLoadingRates] = useState(false);
+  const [customRate, setCustomRate] = useState(
+    transaction?.exchangeRate ? String(Number(transaction.exchangeRate)) : ''
+  );
   const [amount, setAmount] = useState(
-    transaction?.amount ? String(Math.abs(Number(transaction.amount))) : ''
+    transaction?.originalAmount && initialRateCode !== 'ARS'
+      ? String(Math.abs(Number(transaction.originalAmount)))
+      : transaction?.amount
+        ? String(Math.abs(Number(transaction.amount)))
+        : ''
   );
   const [description, setDescription] = useState(transaction?.description || '');
   const [selectedDate, setSelectedDate] = useState(
@@ -59,11 +86,47 @@ export const AddTransactionScreen: React.FC = () => {
   const formattedDate = selectedDate.toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
   const formattedTime = selectedDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
 
+  const loadRates = async (selectedCode: RateOptionCode = rateOption) => {
+    setLoadingRates(true);
+    try {
+      const map = await fetchExchangeRates();
+      setRatesMap(map);
+      if (selectedCode !== 'ARS' && map[selectedCode]?.sell && !customRate) {
+        setCustomRate(String(map[selectedCode].sell));
+      }
+    } finally {
+      setLoadingRates(false);
+    }
+  };
+
   useFocusEffect(
     React.useCallback(() => {
       fetchCategories();
+      loadRates(rateOption);
     }, [])
   );
+
+  const handleSelectRateOption = (code: RateOptionCode) => {
+    setRateOption(code);
+    if (code === 'ARS') {
+      setCustomRate('');
+      return;
+    }
+    const liveRate = ratesMap[code]?.sell;
+    if (liveRate) {
+      setCustomRate(String(liveRate));
+    } else {
+      loadRates(code).then(() => {});
+    }
+  };
+
+  const activeRateMeta = getRateMeta(rateOption);
+  const parsedInputAmount = parseFloat(amount.replace(',', '.')) || 0;
+  const parsedExchangeRate = parseFloat(customRate.replace(',', '.')) || 0;
+  const convertedArsAmount =
+    rateOption === 'ARS'
+      ? parsedInputAmount
+      : +(parsedInputAmount * parsedExchangeRate).toFixed(2);
 
   const fetchCategories = async () => {
     try {
@@ -117,15 +180,28 @@ export const AddTransactionScreen: React.FC = () => {
       Alert.alert('Monto inválido', 'Por favor ingresá un monto mayor a cero');
       return;
     }
+    if (rateOption !== 'ARS' && (isNaN(parsedExchangeRate) || parsedExchangeRate <= 0)) {
+      Alert.alert('Cotización inválida', 'Por favor ingresá una cotización válida mayor a cero');
+      return;
+    }
     if (!selectedCategoryId) {
       Alert.alert('Categoría requerida', 'Por favor seleccioná una categoría');
       return;
     }
 
+    const finalArsAmount =
+      rateOption === 'ARS'
+        ? parsedAmount
+        : +(parsedAmount * parsedExchangeRate).toFixed(2);
+
     setLoading(true);
     try {
       const payload = {
-        amount: parsedAmount.toFixed(2),
+        amount: finalArsAmount.toFixed(2),
+        currency: activeRateMeta.currency,
+        originalAmount: rateOption === 'ARS' ? null : parsedAmount.toFixed(2),
+        exchangeRate: rateOption === 'ARS' ? null : parsedExchangeRate.toFixed(2),
+        rateType: rateOption === 'ARS' ? null : rateOption,
         type,
         categoryId: selectedCategoryId,
         description: description.trim() ? description.trim() : isEditing ? null : undefined,
@@ -219,13 +295,69 @@ export const AddTransactionScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Amount */}
-        <View style={{ ...cardStyle, paddingTop: 20, paddingBottom: 24, paddingHorizontal: 20, alignItems: 'center' }}>
-          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Monto
+        {/* Amount + Currency / Exchange Rate Selector */}
+        <View style={{ ...cardStyle, paddingTop: 18, paddingBottom: 22, paddingHorizontal: 18, alignItems: 'center' }}>
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Moneda / Cotización
+          </Text>
+
+          {/* Horizontal Rate Selector Pills */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingBottom: 14 }}
+          >
+            {RATE_OPTIONS.map((opt) => {
+              const isSelected = rateOption === opt.code;
+              const liveQuote = opt.code !== 'ARS' ? ratesMap[opt.code]?.sell : null;
+              return (
+                <TouchableOpacity
+                  key={opt.code}
+                  onPress={() => handleSelectRateOption(opt.code)}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 12,
+                    borderWidth: 1.5,
+                    borderColor: isSelected ? colors.brand : colors.border,
+                    backgroundColor: isSelected ? colors.brandLight : colors.bgInput,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: isSelected ? 'Inter_600SemiBold' : 'Inter_500Medium',
+                      fontSize: 12,
+                      color: isSelected ? colors.brand : colors.textSecondary,
+                    }}
+                  >
+                    {opt.shortLabel}
+                  </Text>
+                  {liveQuote ? (
+                    <Text
+                      style={{
+                        fontFamily: 'Inter_400Regular',
+                        fontSize: 11,
+                        color: isSelected ? colors.brand : colors.textMuted,
+                      }}
+                    >
+                      ${Math.round(liveQuote).toLocaleString('es-AR')}
+                    </Text>
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Monto ({activeRateMeta.currency})
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 26, color: colors.textMuted, marginRight: 4 }}>$</Text>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: rateOption === 'ARS' ? 26 : 20, color: colors.textMuted, marginRight: 6 }}>
+              {activeRateMeta.symbol}
+            </Text>
             <TextInput
               value={amount}
               onChangeText={setAmount}
@@ -235,7 +367,7 @@ export const AddTransactionScreen: React.FC = () => {
               autoFocus
               style={{
                 fontFamily: 'Outfit_800ExtraBold',
-                fontSize: 56,
+                fontSize: 52,
                 color: colors.textPrimary,
                 letterSpacing: -1,
                 minWidth: 100,
@@ -244,6 +376,86 @@ export const AddTransactionScreen: React.FC = () => {
               }}
             />
           </View>
+
+          {/* Live Exchange Rate & ARS Conversion Box when non-ARS is selected */}
+          {rateOption !== 'ARS' && (
+            <View
+              style={{
+                width: '100%',
+                marginTop: 14,
+                padding: 12,
+                borderRadius: 14,
+                backgroundColor: colors.bgInput,
+                borderWidth: 1,
+                borderColor: `${colors.brand}30`,
+                gap: 8,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                  <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: colors.textSecondary }}>
+                    Cotización {activeRateMeta.shortLabel}:
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => loadRates(rateOption)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <RefreshCw size={13} color={colors.brand} />
+                  </TouchableOpacity>
+                </View>
+
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: colors.bgCard,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderRadius: 8,
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                  }}
+                >
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.textMuted, marginRight: 2 }}>
+                    $
+                  </Text>
+                  <TextInput
+                    value={customRate}
+                    onChangeText={setCustomRate}
+                    keyboardType="decimal-pad"
+                    placeholder={loadingRates ? '...' : '0'}
+                    placeholderTextColor={colors.textMuted}
+                    style={{
+                      fontFamily: 'Inter_600SemiBold',
+                      fontSize: 13,
+                      color: colors.textPrimary,
+                      minWidth: 56,
+                      textAlign: 'right',
+                      padding: 0,
+                    }}
+                  />
+                </View>
+              </View>
+
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingTop: 6,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.borderSubtle,
+                }}
+              >
+                <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: colors.textMuted }}>
+                  Equivalente en Pesos (ARS)
+                </Text>
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: colors.brand }}>
+                  {formatCurrency(convertedArsAmount)}
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Category grid — tags with color */}

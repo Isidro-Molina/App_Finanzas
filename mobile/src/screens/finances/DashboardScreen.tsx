@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { Info, X, ChevronLeft, ChevronRight, ChevronDown, AlertCircle, RefreshCw } from 'lucide-react-native';
 import { formatCurrency, formatAmount } from '../../utils/currency';
+import { getRateMeta, formatForeignAmount } from '../../utils/exchangeRates';
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -41,6 +42,10 @@ interface SummaryData {
 interface Transaction {
   id: string;
   amount: string;
+  currency?: string;
+  originalAmount?: string | null;
+  exchangeRate?: string | null;
+  rateType?: string | null;
   description: string | null;
   type: 'INCOME' | 'EXPENSE';
   date: string;
@@ -91,6 +96,7 @@ export const DashboardScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [tooltipTx, setTooltipTx] = useState<Transaction | null>(null);
+  const [showForeignPrimary, setShowForeignPrimary] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
@@ -386,11 +392,28 @@ export const DashboardScreen = () => {
           onChanged={fetchData}
         />
 
-        {/* Expenses header — solo label, sin botón de texto */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 }}>
+        {/* Expenses header — con opción de alternar vista ARS / USD cuando hay gastos en moneda extranjera */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: colors.textPrimary }}>
             Últimos Gastos
           </Text>
+          {transactions.some((t) => t.currency && t.currency !== 'ARS' && t.originalAmount) && (
+            <TouchableOpacity
+              onPress={() => setShowForeignPrimary((v) => !v)}
+              style={{
+                backgroundColor: colors.brandLight,
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: `${colors.brand}30`,
+              }}
+            >
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.brand }}>
+                {showForeignPrimary ? 'Ver en Pesos ($)' : 'Ver en USD / EUR'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Expenses list */}
@@ -406,6 +429,8 @@ export const DashboardScreen = () => {
               const isIncome = tx.type === 'INCOME';
               const catColor = getCategoryColor(tx.category?.icon, index);
               const hasDescription = Boolean(tx.description && tx.description.trim());
+              const isForeign = Boolean(tx.currency && tx.currency !== 'ARS' && tx.originalAmount);
+              const rateMeta = isForeign ? getRateMeta(tx.rateType, tx.currency) : null;
 
               return (
                 <TouchableOpacity
@@ -442,13 +467,20 @@ export const DashboardScreen = () => {
                   </View>
 
                   <View style={{ flex: 1 }}>
-                    {/* Category tag */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                    {/* Category tag + Currency / Rate badge */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 3 }}>
                       <View style={{ backgroundColor: `${catColor}18`, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
                         <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: catColor }}>
                           {tx.category?.name || 'Sin categoría'}
                         </Text>
                       </View>
+                      {isForeign && rateMeta && (
+                        <View style={{ backgroundColor: colors.brandLight, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: `${colors.brand}25` }}>
+                          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: colors.brand }}>
+                            {rateMeta.badge}
+                          </Text>
+                        </View>
+                      )}
                       {hasDescription && (
                         <TouchableOpacity onPress={() => setTooltipTx(tx)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                           <Info size={14} color={colors.textMuted} />
@@ -461,12 +493,33 @@ export const DashboardScreen = () => {
                     </Text>
                     <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>
                       {new Date(tx.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+                      {isForeign && tx.exchangeRate ? ` · TC $${Math.round(Number(tx.exchangeRate)).toLocaleString('es-AR')}` : ''}
                     </Text>
                   </View>
 
-                  <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: isIncome ? colors.income : colors.expense }}>
-                    {isIncome ? '+' : '-'}${formatAmount(Math.abs(Number(tx.amount)))}
-                  </Text>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    {isForeign && showForeignPrimary ? (
+                      <>
+                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: isIncome ? colors.income : colors.expense }}>
+                          {isIncome ? '+' : '-'}{formatForeignAmount(tx.originalAmount, tx.currency)}
+                        </Text>
+                        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
+                          ${formatAmount(Math.abs(Number(tx.amount)))} ARS
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: isIncome ? colors.income : colors.expense }}>
+                          {isIncome ? '+' : '-'}${formatAmount(Math.abs(Number(tx.amount)))}
+                        </Text>
+                        {isForeign && (
+                          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: colors.brand, marginTop: 2 }}>
+                            {formatForeignAmount(tx.originalAmount, tx.currency)}
+                          </Text>
+                        )}
+                      </>
+                    )}
+                  </View>
                 </TouchableOpacity>
               );
             })

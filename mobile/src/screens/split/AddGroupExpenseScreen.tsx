@@ -11,9 +11,17 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import apiClient from '../../api/client';
-import { ArrowLeft, Calendar, Clock, Users, Check } from 'lucide-react-native';
+import { ArrowLeft, Calendar, Clock, Users, Check, RefreshCw } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { formatCurrency } from '../../utils/currency';
+import {
+  RATE_OPTIONS,
+  RateOptionCode,
+  ExchangeRateItem,
+  fetchExchangeRates,
+  getRateMeta,
+} from '../../utils/exchangeRates';
 
 interface Member {
   user: { id: string; name: string; email: string };
@@ -48,6 +56,10 @@ export const AddGroupExpenseScreen: React.FC = () => {
 
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
+  const [rateOption, setRateOption] = useState<RateOptionCode>('ARS');
+  const [ratesMap, setRatesMap] = useState<Record<string, ExchangeRateItem>>({});
+  const [loadingRates, setLoadingRates] = useState(false);
+  const [customRate, setCustomRate] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -62,13 +74,28 @@ export const AddGroupExpenseScreen: React.FC = () => {
   const formattedDate = selectedDate.toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
   const formattedTime = selectedDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
 
+  const loadRates = async (selectedCode: RateOptionCode = rateOption) => {
+    setLoadingRates(true);
+    try {
+      const map = await fetchExchangeRates();
+      setRatesMap(map);
+      if (selectedCode !== 'ARS' && map[selectedCode]?.sell) {
+        setCustomRate(String(map[selectedCode].sell));
+      }
+    } finally {
+      setLoadingRates(false);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [membersRes, catsRes] = await Promise.all([
+        const [membersRes, catsRes, fetchedRates] = await Promise.all([
           apiClient.get(`/groups/${groupId}`),
           apiClient.get('/categories'),
+          fetchExchangeRates(),
         ]);
+        setRatesMap(fetchedRates);
 
         const members: Member[] = membersRes.data.members || [];
         setParticipants(members.map((m) => ({
@@ -95,9 +122,29 @@ export const AddGroupExpenseScreen: React.FC = () => {
     fetchData();
   }, [groupId]);
 
+  const handleSelectRateOption = (code: RateOptionCode) => {
+    setRateOption(code);
+    if (code === 'ARS') {
+      setCustomRate('');
+      return;
+    }
+    const liveRate = ratesMap[code]?.sell;
+    if (liveRate) {
+      setCustomRate(String(liveRate));
+    } else {
+      loadRates(code).then(() => {});
+    }
+  };
+
+  const activeRateMeta = getRateMeta(rateOption);
   const includedParticipants = participants.filter((p) => p.included);
   const includedCount = includedParticipants.length;
-  const totalParsed = parseFloat(amount.replace(',', '.')) || 0;
+  const parsedInputAmount = parseFloat(amount.replace(',', '.')) || 0;
+  const parsedExchangeRate = parseFloat(customRate.replace(',', '.')) || 0;
+  const totalParsed =
+    rateOption === 'ARS'
+      ? parsedInputAmount
+      : +(parsedInputAmount * parsedExchangeRate).toFixed(2);
 
   const getEqualShare = (idx: number) => {
     if (includedCount === 0 || totalParsed === 0) return '0.00';
@@ -123,10 +170,14 @@ export const AddGroupExpenseScreen: React.FC = () => {
 
   const handleSubmit = async () => {
     if (!description.trim()) { Alert.alert('Campo requerido', 'Ingresá una descripción.'); return; }
-    if (!amount || isNaN(totalParsed) || totalParsed <= 0) { Alert.alert('Monto inválido', 'Ingresá un monto mayor a cero.'); return; }
+    if (!amount || isNaN(parsedInputAmount) || parsedInputAmount <= 0) { Alert.alert('Monto inválido', 'Ingresá un monto mayor a cero.'); return; }
+    if (rateOption !== 'ARS' && (isNaN(parsedExchangeRate) || parsedExchangeRate <= 0)) {
+      Alert.alert('Cotización inválida', 'Ingresá una cotización válida mayor a cero.');
+      return;
+    }
     if (includedCount === 0) { Alert.alert('Sin participantes', 'Seleccioná al menos un participante.'); return; }
     if (!splitEqual && !customSumOk) {
-      Alert.alert('Montos incorrectos', `La suma ($${customSum.toFixed(2)}) debe ser igual al total ($${totalParsed.toFixed(2)}).`);
+      Alert.alert('Montos incorrectos', `La suma ($${customSum.toFixed(2)}) debe ser igual al total en pesos ($${totalParsed.toFixed(2)}).`);
       return;
     }
     if (
@@ -152,6 +203,10 @@ export const AddGroupExpenseScreen: React.FC = () => {
       await apiClient.post(`/groups/${groupId}/expenses`, {
         description: description.trim(),
         amount: totalParsed.toFixed(2),
+        currency: activeRateMeta.currency,
+        originalAmount: rateOption === 'ARS' ? null : parsedInputAmount.toFixed(2),
+        exchangeRate: rateOption === 'ARS' ? null : parsedExchangeRate.toFixed(2),
+        rateType: rateOption === 'ARS' ? null : rateOption,
         date: selectedDate.toISOString(),
         categoryId: selectedCategoryId || undefined,
         splits,
@@ -208,22 +263,156 @@ export const AddGroupExpenseScreen: React.FC = () => {
           />
         </View>
 
-        {/* Amount */}
-        <View style={{ ...cardStyle, alignItems: 'center', paddingVertical: 24 }}>
-          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-            Monto Total
+        {/* Amount + Currency / Exchange Rate Selector */}
+        <View style={{ ...cardStyle, alignItems: 'center', paddingVertical: 20 }}>
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
+            Moneda / Cotización
+          </Text>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingBottom: 14 }}
+          >
+            {RATE_OPTIONS.map((opt) => {
+              const isSelected = rateOption === opt.code;
+              const liveQuote = opt.code !== 'ARS' ? ratesMap[opt.code]?.sell : null;
+              return (
+                <TouchableOpacity
+                  key={opt.code}
+                  onPress={() => handleSelectRateOption(opt.code)}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 12,
+                    borderWidth: 1.5,
+                    borderColor: isSelected ? colors.brand : colors.border,
+                    backgroundColor: isSelected ? colors.brandLight : colors.bgInput,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: isSelected ? 'Inter_600SemiBold' : 'Inter_500Medium',
+                      fontSize: 12,
+                      color: isSelected ? colors.brand : colors.textSecondary,
+                    }}
+                  >
+                    {opt.shortLabel}
+                  </Text>
+                  {liveQuote ? (
+                    <Text
+                      style={{
+                        fontFamily: 'Inter_400Regular',
+                        fontSize: 11,
+                        color: isSelected ? colors.brand : colors.textMuted,
+                      }}
+                    >
+                      ${Math.round(liveQuote).toLocaleString('es-AR')}
+                    </Text>
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+            Monto Total ({activeRateMeta.currency})
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 26, color: colors.textMuted, marginRight: 4 }}>$</Text>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: rateOption === 'ARS' ? 26 : 20, color: colors.textMuted, marginRight: 6 }}>
+              {activeRateMeta.symbol}
+            </Text>
             <TextInput
               value={amount}
               onChangeText={setAmount}
               placeholder="0"
               placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
-              style={{ fontFamily: 'Outfit_800ExtraBold', fontSize: 48, color: colors.textPrimary, letterSpacing: -1, minWidth: 80, textAlign: 'center', padding: 0 }}
+              style={{ fontFamily: 'Outfit_800ExtraBold', fontSize: 46, color: colors.textPrimary, letterSpacing: -1, minWidth: 80, textAlign: 'center', padding: 0 }}
             />
           </View>
+
+          {rateOption !== 'ARS' && (
+            <View
+              style={{
+                width: '100%',
+                marginTop: 14,
+                padding: 12,
+                borderRadius: 14,
+                backgroundColor: colors.bgInput,
+                borderWidth: 1,
+                borderColor: `${colors.brand}30`,
+                gap: 8,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                  <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: colors.textSecondary }}>
+                    Cotización {activeRateMeta.shortLabel}:
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => loadRates(rateOption)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <RefreshCw size={13} color={colors.brand} />
+                  </TouchableOpacity>
+                </View>
+
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: colors.bgCard,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderRadius: 8,
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                  }}
+                >
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.textMuted, marginRight: 2 }}>
+                    $
+                  </Text>
+                  <TextInput
+                    value={customRate}
+                    onChangeText={setCustomRate}
+                    keyboardType="decimal-pad"
+                    placeholder={loadingRates ? '...' : '0'}
+                    placeholderTextColor={colors.textMuted}
+                    style={{
+                      fontFamily: 'Inter_600SemiBold',
+                      fontSize: 13,
+                      color: colors.textPrimary,
+                      minWidth: 56,
+                      textAlign: 'right',
+                      padding: 0,
+                    }}
+                  />
+                </View>
+              </View>
+
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingTop: 6,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.borderSubtle,
+                }}
+              >
+                <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: colors.textMuted }}>
+                  Total a dividir en Pesos (ARS)
+                </Text>
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: colors.brand }}>
+                  {formatCurrency(totalParsed)}
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Category selector */}
