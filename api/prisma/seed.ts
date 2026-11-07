@@ -64,6 +64,12 @@ async function main() {
       data: { categoryId: newTargetId },
     });
 
+    // Reasignar gastos grupales asociados
+    await prisma.groupExpense.updateMany({
+      where: { categoryId: oldCat.id },
+      data: { categoryId: newTargetId },
+    });
+
     // Reasignar o eliminar budgets asociados
     await prisma.budget.deleteMany({
       where: { categoryId: oldCat.id },

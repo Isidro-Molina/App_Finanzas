@@ -14,9 +14,6 @@ dist/
 build/
 coverage/
 
-# ─── Prisma ─────────────────────────────────
-api/prisma/migrations/
-
 # ─── OS ─────────────────────────────────────
 .DS_Store
 Thumbs.db

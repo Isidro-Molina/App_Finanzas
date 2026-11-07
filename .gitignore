@@ -25,9 +25,6 @@ mobile/web-build/
 api/dist/
 api/build/
 
-# ─── Prisma ─────────────────────────────────
-api/prisma/migrations/
-
 # ─── OS ─────────────────────────────────────
 .DS_Store
 Thumbs.db
