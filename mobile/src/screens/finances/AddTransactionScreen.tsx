@@ -68,9 +68,23 @@ export const AddTransactionScreen: React.FC = () => {
         : ''
   );
   const [description, setDescription] = useState(transaction?.description || '');
-  const [selectedDate, setSelectedDate] = useState(
-    transaction?.date ? new Date(transaction.date) : new Date()
-  );
+  const [selectedDate, setSelectedDate] = useState(() => {
+    if (transaction?.date) return new Date(transaction.date);
+    const now = new Date();
+    const initMonth = route.params?.initialMonth;
+    const initYear = route.params?.initialYear;
+    if (
+      typeof initMonth === 'number' &&
+      typeof initYear === 'number' &&
+      (initMonth !== now.getMonth() + 1 || initYear !== now.getFullYear())
+    ) {
+      const maxDayInMonth = new Date(initYear, initMonth, 0).getDate();
+      const safeDay = Math.min(now.getDate(), maxDayInMonth);
+      return new Date(initYear, initMonth - 1, safeDay, now.getHours(), now.getMinutes());
+    }
+    return now;
+  });
+  const [maxPickerDate] = useState(() => new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -643,7 +657,7 @@ export const AddTransactionScreen: React.FC = () => {
               value={selectedDate}
               mode="date"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              maximumDate={new Date()}
+              maximumDate={maxPickerDate}
               themeVariant={isDark ? 'dark' : 'light'}
               onChange={(event, date) => {
                 setShowDatePicker(Platform.OS === 'ios');

@@ -497,7 +497,12 @@ export const DashboardScreen = () => {
 
       {/* FAB — único botón de agregar */}
       <TouchableOpacity
-        onPress={() => navigation.navigate('AddTransaction')}
+        onPress={() =>
+          navigation.navigate('AddTransaction', {
+            initialMonth: currentMonth,
+            initialYear: currentYear,
+          })
+        }
         style={{
           position: 'absolute',
           bottom: Platform.OS === 'ios' ? 98 : 90,

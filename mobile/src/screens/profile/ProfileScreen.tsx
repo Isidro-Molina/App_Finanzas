@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, Pressable } from 'react-native';
 import { Spinner } from '../../components/Spinner';
 import { useAuth } from '../../context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,6 +8,19 @@ import { useFocusEffect } from '@react-navigation/native';
 import apiClient from '../../api/client';
 import { Trophy, BarChart2, Users } from 'lucide-react-native';
 import { formatCurrency } from '../../utils/currency';
+
+const formatCompactExpense = (val: number): string => {
+  if (!val || val <= 0) return '—';
+  if (val >= 1_000_000) {
+    const m = val / 1_000_000;
+    return `$${m >= 10 ? Math.round(m) : m.toFixed(1).replace('.', ',')}M`;
+  }
+  if (val >= 1_000) {
+    const k = val / 1_000;
+    return `$${k >= 10 ? Math.round(k) : k.toFixed(1).replace('.', ',')}k`;
+  }
+  return `$${Math.round(val)}`;
+};
 
 interface MonthlySeriesItem {
   key: string;
@@ -279,37 +292,74 @@ export const ProfileScreen = () => {
                 </Text>
               </View>
 
-              <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 108, gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10 }}>
                 {monthlySeries.map((m, idx) => {
                   const isSelected = idx === selectedIndex;
-                  const height = maxVal > 0 ? Math.max(6, (m.totalExpense / maxVal) * 84) : 6;
+                  const hasExpense = m.totalExpense > 0;
+                  const ratio = hasExpense && maxVal > 0 ? m.totalExpense / maxVal : 0;
+                  const fillHeight = hasExpense ? Math.max(16, Math.round(Math.pow(ratio, 0.55) * 88)) : 0;
                   return (
-                    <TouchableOpacity
+                    <Pressable
                       key={m.key}
-                      activeOpacity={0.75}
                       onPress={() => setSelectedIndex(idx)}
-                      style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}
+                      style={{ flex: 1, alignItems: 'center' }}
                     >
+                      <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        style={{
+                          fontFamily: isSelected ? 'Inter_700Bold' : 'Inter_500Medium',
+                          fontSize: 10,
+                          color: isSelected
+                            ? colors.brand
+                            : hasExpense
+                              ? colors.textSecondary
+                              : colors.textMuted,
+                          marginBottom: 6,
+                        }}
+                      >
+                        {formatCompactExpense(m.totalExpense)}
+                      </Text>
+
                       <View
                         style={{
                           width: '100%',
-                          height,
-                          backgroundColor: isSelected
+                          alignSelf: 'stretch',
+                          height: 88,
+                          borderRadius: 8,
+                          backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
+                          justifyContent: 'flex-end',
+                          overflow: 'hidden',
+                          borderWidth: isSelected ? 1.5 : 1,
+                          borderColor: isSelected
                             ? colors.brand
                             : isDark
-                              ? '#334155'
-                              : '#BFDBFE',
-                          borderTopLeftRadius: 6,
-                          borderTopRightRadius: 6,
-                          borderBottomLeftRadius: 4,
-                          borderBottomRightRadius: 4,
+                              ? '#33415560'
+                              : '#E2E8F0',
                           marginBottom: 6,
                         }}
-                      />
+                      >
+                        {hasExpense && (
+                          <View
+                            style={{
+                              width: '100%',
+                              height: fillHeight,
+                              backgroundColor: isSelected
+                                ? colors.brand
+                                : isDark
+                                  ? '#3B82F6'
+                                  : '#60A5FA',
+                              borderTopLeftRadius: 6,
+                              borderTopRightRadius: 6,
+                            }}
+                          />
+                        )}
+                      </View>
+
                       <Text
                         style={{
-                          fontFamily: isSelected ? 'Inter_700Bold' : 'Inter_400Regular',
-                          fontSize: 10,
+                          fontFamily: isSelected ? 'Inter_700Bold' : 'Inter_500Medium',
+                          fontSize: 11,
                           color: isSelected ? colors.brand : colors.textMuted,
                         }}
                       >
@@ -324,7 +374,7 @@ export const ProfileScreen = () => {
                           backgroundColor: isSelected ? colors.brand : 'transparent',
                         }}
                       />
-                    </TouchableOpacity>
+                    </Pressable>
                   );
                 })}
               </View>
