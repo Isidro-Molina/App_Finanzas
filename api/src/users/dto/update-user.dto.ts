@@ -6,6 +6,7 @@ import {
   MinLength,
   MaxLength,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 /**
  * DTO para actualizar el perfil del usuario autenticado.
@@ -15,6 +16,9 @@ import {
  */
 export class UpdateUserDto {
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
   @IsNotEmpty()
   @MinLength(2)
@@ -22,6 +26,9 @@ export class UpdateUserDto {
   name?: string;
 
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
   @IsEmail()
   email?: string;
 }

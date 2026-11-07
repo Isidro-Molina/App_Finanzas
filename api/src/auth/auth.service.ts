@@ -44,8 +44,9 @@ export class AuthService {
   // ─── Registro ────────────────────────────────────────────────────────────
 
   async register(dto: RegisterDto) {
+    const email = dto.email.trim().toLowerCase();
     // 1. Verificar que el email no esté en uso
-    const existing = await this.usersService.findByEmail(dto.email);
+    const existing = await this.usersService.findByEmail(email);
     if (existing) {
       throw new ConflictException('Ya existe una cuenta con ese email');
     }
@@ -56,8 +57,8 @@ export class AuthService {
     // 3. Crear el usuario en la BD
     const user = await this.prisma.user.create({
       data: {
-        name: dto.name,
-        email: dto.email,
+        name: dto.name.trim(),
+        email,
         passwordHash,
       },
       select: SAFE_USER_SELECT,
@@ -73,12 +74,13 @@ export class AuthService {
   // ─── Login ───────────────────────────────────────────────────────────────
 
   async login(dto: LoginDto) {
+    const email = dto.email.trim().toLowerCase();
     // 1. Buscar usuario por email (con passwordHash para comparar)
-    const user = await this.usersService.findByEmail(dto.email);
+    const user = await this.usersService.findByEmail(email);
 
     // 2. Verificar credenciales
     // Usamos el mismo mensaje genérico para no revelar si el email existe o no
-    if (!user) {
+    if (!user || !user.passwordHash) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
@@ -103,24 +105,35 @@ export class AuthService {
   // ─── Google OAuth ─────────────────────────────────────────────────────────
 
   async googleAuth(dto: GoogleAuthDto) {
+    const allowedAudiences = [
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_IOS_CLIENT_ID,
+      process.env.GOOGLE_ANDROID_CLIENT_ID,
+    ].filter((id): id is string => Boolean(id));
+
     // 1. Verificar el idToken con Google
     let ticket;
     try {
       ticket = await this.googleClient.verifyIdToken({
         idToken: dto.idToken,
-        audience: process.env.GOOGLE_CLIENT_ID,
+        audience:
+          allowedAudiences.length > 0
+            ? allowedAudiences
+            : process.env.GOOGLE_CLIENT_ID,
       });
     } catch {
       throw new UnauthorizedException('Token de Google inválido o expirado');
     }
 
     const payload = ticket.getPayload();
-    if (!payload || !payload.email) {
-      throw new UnauthorizedException('No se pudo obtener el email de Google');
+    if (!payload || !payload.email || !payload.email_verified) {
+      throw new UnauthorizedException(
+        'No se pudo obtener un email verificado de Google',
+      );
     }
 
-    const email: string = payload.email;
-    const name: string = payload.name || email.split('@')[0];
+    const email: string = payload.email.trim().toLowerCase();
+    const name: string = (payload.name || email.split('@')[0]).trim();
 
     // 2. Buscar o crear el usuario
     let user = await this.usersService.findByEmail(email);
@@ -163,7 +176,9 @@ export class AuthService {
         'Si el email está registrado, te enviamos un código para restablecer tu contraseña.',
     };
 
-    const user = await this.usersService.findByEmail(dto.email);
+    const user = await this.usersService.findByEmail(
+      dto.email.trim().toLowerCase(),
+    );
     if (!user) return genericResponse;
 
     const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
@@ -194,7 +209,9 @@ export class AuthService {
   async resetPassword(dto: ResetPasswordDto) {
     const invalid = () => new BadRequestException('Código inválido o vencido');
 
-    const user = await this.usersService.findByEmail(dto.email);
+    const user = await this.usersService.findByEmail(
+      dto.email.trim().toLowerCase(),
+    );
     if (!user) throw invalid();
 
     const token = await this.prisma.passwordResetToken.findFirst({

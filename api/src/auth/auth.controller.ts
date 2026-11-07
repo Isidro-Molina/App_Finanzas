@@ -51,6 +51,7 @@ export class AuthController {
    * lo verifica con Google, y devuelve un JWT de la app.
    * Body: { idToken: string }
    */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('google')
   @HttpCode(HttpStatus.OK)
   googleAuth(@Body() dto: GoogleAuthDto) {
@@ -74,6 +75,7 @@ export class AuthController {
    * Valida el código y cambia la contraseña.
    * Body: { email, code, newPassword }
    */
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   resetPassword(@Body() dto: ResetPasswordDto) {
