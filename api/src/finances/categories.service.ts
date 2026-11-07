@@ -2,6 +2,7 @@ import {
   Injectable,
   ForbiddenException,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
@@ -52,6 +53,20 @@ export class CategoriesService {
       throw new ForbiddenException(
         'No tenés permiso para editar esta categoría',
       );
+    }
+
+    if (dto.type !== undefined && dto.type !== category.type) {
+      const [txCount, budgetCount, groupExpCount] = await Promise.all([
+        this.prisma.transaction.count({ where: { categoryId } }),
+        this.prisma.budget.count({ where: { categoryId } }),
+        this.prisma.groupExpense.count({ where: { categoryId } }),
+      ]);
+
+      if (txCount > 0 || budgetCount > 0 || groupExpCount > 0) {
+        throw new BadRequestException(
+          'No se puede cambiar el tipo (Gasto/Ingreso) de una categoría que ya tiene movimientos o presupuestos asociados',
+        );
+      }
     }
 
     return this.prisma.category.update({

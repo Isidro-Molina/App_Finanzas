@@ -170,7 +170,29 @@ export class TransactionsService {
 
   async remove(userId: string, id: string) {
     await this.assertOwnership(userId, id);
-    await this.prisma.transaction.delete({ where: { id } });
+
+    await this.prisma.$transaction(async (tx) => {
+      // Si la transacción estaba vinculada a un pago de gasto grupal (ExpenseSplit),
+      // revertimos isPaid a false cuando corresponda a un deudor para mantener sincronizado el balance grupal.
+      const linkedSplits = await tx.expenseSplit.findMany({
+        where: { transactionId: id },
+        include: { groupExpense: { select: { paidById: true } } },
+      });
+
+      for (const split of linkedSplits) {
+        const isPayerOwnSplit = split.userId === split.groupExpense.paidById;
+        await tx.expenseSplit.update({
+          where: { id: split.id },
+          data: {
+            transactionId: null,
+            ...(isPayerOwnSplit ? {} : { isPaid: false }),
+          },
+        });
+      }
+
+      await tx.transaction.delete({ where: { id } });
+    });
+
     return { message: 'Transacción eliminada' };
   }
 
