@@ -84,7 +84,7 @@ export const SettingsScreen = () => {
   const handleDeleteAccount = () => {
     Alert.alert(
       'Eliminar cuenta',
-      '¿Estás seguro de que querés eliminar tu cuenta? Esta acción es definitiva y borrará todos tus datos, gastos y registros asociados.',
+      '¿Estás seguro de que querés eliminar tu cuenta? Se borrarán todos tus datos y gastos personales (el historial de gastos en grupos compartidos se mantendrá para los demás miembros).',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -103,6 +103,7 @@ export const SettingsScreen = () => {
                     setDeletingAccount(true);
                     try {
                       await apiClient.delete('/users/me');
+                      await disableBiometric();
                       await logout();
                     } catch (e: any) {
                       const msg = e.response?.data?.message || 'Error al eliminar la cuenta';

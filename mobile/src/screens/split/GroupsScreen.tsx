@@ -23,6 +23,7 @@ interface Group {
   createdAt: string;
   members: Array<{
     user: {
+      id: string;
       name: string;
     };
   }>;
@@ -51,7 +52,7 @@ const AvatarStack = ({ members, borderColor }: { members: Array<any>; borderColo
           }}
         >
           <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 8, color: '#fff' }}>
-            {m.user.name[0].toUpperCase()}
+            {(m.user.name?.trim()?.[0] ?? '?').toUpperCase()}
           </Text>
         </View>
       ))}
@@ -209,7 +210,7 @@ export const GroupsScreen = () => {
                 Participantes totales
               </Text>
               <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: colors.textPrimary }}>
-                {[...new Set(groups.flatMap(g => g.members.map(m => m.user.name)))].length}
+                {[...new Set(groups.flatMap(g => g.members.map(m => m.user.id || m.user.name)))].length}
               </Text>
             </View>
           </View>

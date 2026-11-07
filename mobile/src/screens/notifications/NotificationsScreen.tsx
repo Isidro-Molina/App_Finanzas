@@ -10,7 +10,7 @@ interface AppNotification {
   title: string;
   message: string;
   isRead: boolean;
-  type: 'GROUP_INVITE' | 'GROUP_EXPENSE';
+  type: 'GROUP_INVITE' | 'GROUP_EXPENSE' | 'MEMBER_SUGGESTION' | 'BUDGET_ALERT' | 'SYSTEM';
   relatedId: string | null;
   createdAt: string;
   /** Solo en GROUP_INVITE: estado actual de la invitación */
@@ -171,7 +171,8 @@ export const NotificationsScreen = ({ onUnreadChange }: Props) => {
   };
 
   const renderItem = ({ item }: { item: AppNotification }) => {
-    const Icon = item.type === 'GROUP_INVITE' ? Users : Receipt;
+    const Icon = item.type === 'GROUP_INVITE' || item.type === 'MEMBER_SUGGESTION' ? Users : Receipt;
+    const isSuggestion = item.type === 'MEMBER_SUGGESTION' || item.title.toLowerCase().includes('sugerencia');
     return (
       <TouchableOpacity
         activeOpacity={0.7}
@@ -203,7 +204,7 @@ export const NotificationsScreen = ({ onUnreadChange }: Props) => {
           <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textMuted, marginTop: 2, lineHeight: 18 }}>{item.message}</Text>
           <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: colors.textMuted, marginTop: 6 }}>{timeAgo(item.createdAt)}</Text>
 
-          {item.type === 'GROUP_INVITE' && item.inviteStatus === 'PENDING' && (
+          {item.type === 'GROUP_INVITE' && !isSuggestion && item.inviteStatus === 'PENDING' && (
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
               {respondingId === item.id ? (
                 <ActivityIndicator color={colors.brand} />
@@ -227,10 +228,10 @@ export const NotificationsScreen = ({ onUnreadChange }: Props) => {
               )}
             </View>
           )}
-          {item.type === 'GROUP_INVITE' && item.inviteStatus === 'ACCEPTED' && (
+          {item.type === 'GROUP_INVITE' && !isSuggestion && item.inviteStatus === 'ACCEPTED' && (
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#059669', marginTop: 8 }}>Ya sos parte del grupo · Tocar para abrir</Text>
           )}
-          {item.type === 'GROUP_INVITE' && item.inviteStatus === 'DECLINED' && (
+          {item.type === 'GROUP_INVITE' && !isSuggestion && item.inviteStatus === 'DECLINED' && (
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.textMuted, marginTop: 8 }}>Invitación rechazada o cancelada</Text>
           )}
         </View>

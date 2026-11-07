@@ -12,6 +12,12 @@ const DEFAULT_API_URL = Platform.select({
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL || DEFAULT_API_URL;
 
+if (!__DEV__ && !process.env.EXPO_PUBLIC_API_URL) {
+  console.warn(
+    '⚠️ EXPO_PUBLIC_API_URL no está configurada en el build de producción; usando fallback local.',
+  );
+}
+
 let onUnauthorizedCallback: (() => void) | null = null;
 
 export const setOnUnauthorizedCallback = (cb: () => void) => {

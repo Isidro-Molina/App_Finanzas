@@ -129,6 +129,18 @@ export const AddGroupExpenseScreen: React.FC = () => {
       Alert.alert('Montos incorrectos', `La suma ($${customSum.toFixed(2)}) debe ser igual al total ($${totalParsed.toFixed(2)}).`);
       return;
     }
+    if (
+      !splitEqual &&
+      includedParticipants.some(
+        (p) => (parseFloat(p.amount.replace(',', '.')) || 0) <= 0,
+      )
+    ) {
+      Alert.alert(
+        'Monto inválido',
+        'Todos los participantes seleccionados en la división personalizada deben tener un monto mayor a $0 (desmarcá a quienes no participen).',
+      );
+      return;
+    }
 
     setLoading(true);
     try {
@@ -324,7 +336,7 @@ export const AddGroupExpenseScreen: React.FC = () => {
                     {/* Avatar */}
                     <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: p.included ? colors.brand : colors.bgSubtle, alignItems: 'center', justifyContent: 'center' }}>
                       <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 13, color: p.included ? '#fff' : colors.textMuted }}>
-                        {p.name[0].toUpperCase()}
+                        {(p.name?.trim()?.[0] ?? '?').toUpperCase()}
                       </Text>
                     </View>
 

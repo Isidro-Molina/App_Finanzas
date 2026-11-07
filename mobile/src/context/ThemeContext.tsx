@@ -1,4 +1,7 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const THEME_STORAGE_KEY = 'app_finanzas_theme_dark';
 
 export interface ThemeColors {
   // Backgrounds
@@ -81,8 +84,24 @@ const ThemeContext = createContext<ThemeContextData>({
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isDark, setIsDark] = useState(false);
 
+  useEffect(() => {
+    AsyncStorage.getItem(THEME_STORAGE_KEY)
+      .then((val) => {
+        if (val !== null) {
+          setIsDark(val === 'true');
+        }
+      })
+      .catch((err) => console.error('Error cargando tema:', err));
+  }, []);
+
   const toggleTheme = useCallback(() => {
-    setIsDark((prev) => !prev);
+    setIsDark((prev) => {
+      const next = !prev;
+      AsyncStorage.setItem(THEME_STORAGE_KEY, String(next)).catch((err) =>
+        console.error('Error guardando tema:', err),
+      );
+      return next;
+    });
   }, []);
 
   return (
