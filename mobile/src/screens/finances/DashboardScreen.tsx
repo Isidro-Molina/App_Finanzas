@@ -18,6 +18,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { Info, X, ChevronLeft, ChevronRight, ChevronDown, AlertCircle, RefreshCw } from 'lucide-react-native';
 import { formatCurrency, formatAmount } from '../../utils/currency';
 import { getRateMeta, formatForeignAmount } from '../../utils/exchangeRates';
+import { getCategoryColor } from '../../utils/categoryColors';
 import { registerDashboardRefresh, wasDashboardJustSynced } from '../../utils/syncEvents';
 
 const MONTH_NAMES = [
@@ -61,13 +62,6 @@ interface Budget {
   spent: number;
   remaining: number;
   pctUsed: number;
-}
-
-// Map category icon field (which may hold a color) or use a default palette
-function getCategoryColor(icon: string | null, index: number): string {
-  const palette = ['#2563EB', '#7C3AED', '#DB2777', '#059669', '#D97706', '#0891B2', '#DC2626', '#65A30D'];
-  if (icon && icon.startsWith('#')) return icon;
-  return palette[index % palette.length];
 }
 
 const Skeleton = ({ width, height, borderRadius, marginBottom = 0, style = {} }: any) => {
@@ -430,9 +424,9 @@ export const DashboardScreen = () => {
               </Text>
             </View>
           ) : (
-            transactions.map((tx, index) => {
+            transactions.map((tx) => {
               const isIncome = tx.type === 'INCOME';
-              const catColor = getCategoryColor(tx.category?.icon, index);
+              const catColor = getCategoryColor(tx.category?.icon, tx.category?.name);
               const hasDescription = Boolean(tx.description && tx.description.trim());
               const isForeign = Boolean(tx.currency && tx.currency !== 'ARS' && tx.originalAmount);
               const rateMeta = isForeign ? getRateMeta(tx.rateType, tx.currency) : null;

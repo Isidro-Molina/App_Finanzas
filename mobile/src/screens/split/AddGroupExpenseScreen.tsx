@@ -16,6 +16,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { formatCurrency } from '../../utils/currency';
 import { Spinner } from '../../components/Spinner';
 import { awaitGroupDetailRefresh } from '../../utils/syncEvents';
+import { getCategoryColor } from '../../utils/categoryColors';
 import {
   RATE_OPTIONS,
   RateOptionCode,
@@ -35,12 +36,6 @@ interface Category {
   name: string;
   icon: string | null;
   type: 'INCOME' | 'EXPENSE';
-}
-
-function getCategoryColor(icon: string | null, index: number): string {
-  const palette = ['#2563EB', '#7C3AED', '#DB2777', '#059669', '#D97706', '#0891B2', '#DC2626', '#65A30D'];
-  if (icon && icon.startsWith('#')) return icon;
-  return palette[index % palette.length];
 }
 
 interface ParticipantSplit {
@@ -522,8 +517,8 @@ export const AddGroupExpenseScreen: React.FC = () => {
               Categoría
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {categories.map((cat, idx) => {
-                const catColor = getCategoryColor(cat.icon, idx);
+              {categories.map((cat) => {
+                const catColor = getCategoryColor(cat.icon, cat.name);
                 const isSelected = selectedCategoryId === cat.id;
                 return (
                   <TouchableOpacity

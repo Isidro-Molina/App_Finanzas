@@ -19,7 +19,7 @@ export const Spinner: React.FC<SpinnerProps> = ({
 
   const pixelSize =
     typeof size === 'number' ? size : size === 'large' ? 32 : 18;
-  const stroke = strokeWidth ?? (pixelSize >= 28 ? 3 : 2.2);
+  const stroke = strokeWidth ?? (pixelSize >= 28 ? 3 : 2.3);
   const radius = (pixelSize - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
 
@@ -60,17 +60,8 @@ export const Spinner: React.FC<SpinnerProps> = ({
           r={radius}
           stroke={color}
           strokeWidth={stroke}
-          strokeOpacity={0.22}
-          fill="none"
-        />
-        <Circle
-          cx={pixelSize / 2}
-          cy={pixelSize / 2}
-          r={radius}
-          stroke={color}
-          strokeWidth={stroke}
           strokeLinecap="round"
-          strokeDasharray={`${circumference * 0.28} ${circumference * 0.72}`}
+          strokeDasharray={`${circumference * 0.72} ${circumference * 0.28}`}
           fill="none"
         />
       </Svg>

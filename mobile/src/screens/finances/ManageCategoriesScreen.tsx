@@ -15,6 +15,7 @@ import apiClient from '../../api/client';
 import { ArrowLeft, Plus, Pencil, Trash2, Check, X } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Spinner } from '../../components/Spinner';
+import { getCategoryColor } from '../../utils/categoryColors';
 
 interface Category {
   id: string;
@@ -132,11 +133,6 @@ export const ManageCategoriesScreen: React.FC = () => {
 
   const filtered = categories.filter((c) => filterType === 'ALL' || c.type === filterType);
 
-  const getCatColor = (icon: string | null, i: number) => {
-    if (icon && icon.startsWith('#')) return icon;
-    return COLOR_OPTIONS[i % COLOR_OPTIONS.length];
-  };
-
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' }}>
@@ -198,8 +194,8 @@ export const ManageCategoriesScreen: React.FC = () => {
             </Text>
           </View>
         ) : (
-          filtered.map((cat, i) => {
-            const catColor = getCatColor(cat.icon, i);
+          filtered.map((cat) => {
+            const catColor = getCategoryColor(cat.icon, cat.name);
             return (
               <View
                 key={cat.id}
