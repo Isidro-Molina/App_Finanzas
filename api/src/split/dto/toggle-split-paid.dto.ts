@@ -7,3 +7,4 @@ export class ToggleSplitPaidDto {
   })
   paidCurrency?: 'ARS' | 'USD' | 'EUR';
 }
+
