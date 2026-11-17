@@ -1,0 +1,11 @@
+appId: com.finova.app
+---
+- launchApp
+- tapOn: "Ajustes"
+- scrollUntilVisible:
+    element: "Eliminar cuenta"
+    direction: DOWN
+- tapOn: "Eliminar cuenta"
+- assertVisible: "Escribí ELIMINAR para confirmar"
+- tapOn: "Eliminar cuenta permanentemente"
+- assertVisible: "Escribí ELIMINAR para confirmar"

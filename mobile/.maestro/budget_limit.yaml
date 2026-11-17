@@ -1,0 +1,11 @@
+appId: com.finova.app
+---
+- launchApp
+- tapOn: "Definir límite"
+- tapOn: "Comida"
+- tapOn: "Ej: 50.000"
+- inputText: "50000"
+- assertVisible: "50.000"
+- tapOn: "Guardar límite"
+- assertVisible: "Comida"
+- assertVisible: "Disponible"

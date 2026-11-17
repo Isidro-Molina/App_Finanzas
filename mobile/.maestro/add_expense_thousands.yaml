@@ -1,0 +1,9 @@
+appId: com.finova.app
+---
+- launchApp
+- tapOn: "+"
+- tapOn: "0,00"
+- inputText: "77000"
+- assertVisible: "77.000"
+- tapOn: "Guardar Transacción"
+- assertVisible: "-$77.000,00"
