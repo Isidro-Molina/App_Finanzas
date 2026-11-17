@@ -51,6 +51,20 @@ model User {
   notifications        Notification[]
   passwordResetTokens  PasswordResetToken[]
   hiddenCategories     HiddenCategory[]
+  achievements         UserAchievement[]
+}
+
+model UserAchievement {
+  id         String   @id @default(uuid())
+  code       String
+  unlockedAt DateTime @default(now())
+  metadata   Json?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, code])
+  @@index([userId])
 }
 
 // ==========================================

@@ -9,6 +9,7 @@ import {
   Request,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
+import { AchievementsService } from './achievements.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
@@ -28,7 +29,15 @@ import { Throttle } from '@nestjs/throttler';
 @UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly achievementsService: AchievementsService,
+  ) {}
+
+  @Get('me/achievements')
+  getAchievements(@Request() req: { user: { userId: string } }) {
+    return this.achievementsService.getAchievements(req.user.userId);
+  }
 
   @Get('me/deletion-check')
   getDeletionCheck(@Request() req: { user: { userId: string } }) {

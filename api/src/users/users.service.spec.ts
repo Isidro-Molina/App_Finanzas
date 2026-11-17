@@ -42,6 +42,7 @@ describe('UsersService - Perfiles y eliminación segura de cuenta', () => {
       },
       notification: { deleteMany: jest.fn() },
       passwordResetToken: { deleteMany: jest.fn() },
+      userAchievement: { deleteMany: jest.fn() },
       budget: { deleteMany: jest.fn() },
       transaction: { deleteMany: jest.fn() },
       hiddenCategory: { deleteMany: jest.fn() },

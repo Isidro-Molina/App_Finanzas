@@ -11,3 +11,4 @@ export class DeleteAccountDto {
   @IsString()
   password?: string;
 }
+

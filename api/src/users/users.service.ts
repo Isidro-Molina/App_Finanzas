@@ -301,6 +301,7 @@ export class UsersService {
       // 2. Notificaciones y tokens
       await tx.notification.deleteMany({ where: { userId: id } });
       await tx.passwordResetToken.deleteMany({ where: { userId: id } });
+      await tx.userAchievement.deleteMany({ where: { userId: id } });
 
       // 3. Finanzas personales: desvincular splits de transacciones personales, borrar presupuestos, transacciones y categorías propias
       await tx.expenseSplit.updateMany({
