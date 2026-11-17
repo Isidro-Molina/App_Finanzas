@@ -29,6 +29,7 @@ interface CategoryOption {
   id: string;
   name: string;
   type: 'EXPENSE' | 'INCOME';
+  isHidden?: boolean;
 }
 
 interface Props {
@@ -54,7 +55,9 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
     setIsOpen(true);
     try {
       const res = await apiClient.get('/categories');
-      setCategories((res.data as CategoryOption[]).filter((c) => c.type === 'EXPENSE'));
+      setCategories(
+        (res.data as CategoryOption[]).filter((c) => c.type === 'EXPENSE' && !c.isHidden),
+      );
     } catch (e) {
       console.error('Error cargando categorías:', e);
     }

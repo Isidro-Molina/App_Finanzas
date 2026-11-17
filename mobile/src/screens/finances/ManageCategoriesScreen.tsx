@@ -12,8 +12,10 @@ import {
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import apiClient from '../../api/client';
-import { ArrowLeft, Plus, Pencil, Trash2, Check, X } from 'lucide-react-native';
+import { ArrowLeft, Plus, Pencil, Trash2, Check, X, Eye, EyeOff } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../context/ThemeContext';
+import { useDialog } from '../../context/DialogContext';
 import { Spinner } from '../../components/Spinner';
 import { getCategoryColor } from '../../utils/categoryColors';
 
@@ -23,6 +25,7 @@ interface Category {
   icon: string | null; // color hex
   type: 'INCOME' | 'EXPENSE';
   userId: string | null; // null = global category
+  isHidden?: boolean;
 }
 
 const COLOR_OPTIONS = [
@@ -34,6 +37,7 @@ const COLOR_OPTIONS = [
 export const ManageCategoriesScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { colors } = useTheme();
+  const { toast } = useDialog();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -131,7 +135,44 @@ export const ManageCategoriesScreen: React.FC = () => {
     );
   };
 
+  const handleToggleVisibility = async (cat: Category) => {
+    const nextHidden = !cat.isHidden;
+    if (nextHidden) {
+      const visibleOfSameType = categories.filter(
+        (c) => c.type === cat.type && !c.isHidden,
+      );
+      if (visibleOfSameType.length <= 1) {
+        toast('Debe quedar al menos una categoría visible');
+        return;
+      }
+    }
+
+    Haptics.selectionAsync().catch(() => {});
+    setCategories((prev) =>
+      prev.map((c) => (c.id === cat.id ? { ...c, isHidden: nextHidden } : c)),
+    );
+    toast(
+      nextHidden
+        ? `${cat.name} oculta al cargar gastos`
+        : `${cat.name} visible al cargar gastos`,
+    );
+
+    try {
+      await apiClient.patch(`/categories/${cat.id}/visibility`, {
+        hidden: nextHidden,
+      });
+    } catch (e: any) {
+      setCategories((prev) =>
+        prev.map((c) => (c.id === cat.id ? { ...c, isHidden: !nextHidden } : c)),
+      );
+      const msg = e.response?.data?.message || 'No se pudo actualizar la visibilidad';
+      toast(Array.isArray(msg) ? msg[0] : msg);
+    }
+  };
+
   const filtered = categories.filter((c) => filterType === 'ALL' || c.type === filterType);
+  const personalCategories = filtered.filter((c) => c.userId !== null);
+  const baseCategories = filtered.filter((c) => c.userId === null);
 
   if (loading) {
     return (
@@ -194,57 +235,120 @@ export const ManageCategoriesScreen: React.FC = () => {
             </Text>
           </View>
         ) : (
-          filtered.map((cat) => {
-            const catColor = getCategoryColor(cat.icon, cat.name);
-            return (
-              <View
-                key={cat.id}
-                style={{ backgroundColor: colors.bgCard, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 }}
-              >
-                {/* Color circle */}
-                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: `${catColor}18`, alignItems: 'center', justifyContent: 'center' }}>
-                  <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: catColor }} />
+          <View style={{ gap: 18 }}>
+            {/* Mis categorías (editables) */}
+            <View style={{ gap: 8 }}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, paddingHorizontal: 4 }}>
+                Mis categorías
+              </Text>
+              {personalCategories.length === 0 ? (
+                <View style={{ backgroundColor: colors.bgCard, borderRadius: 14, padding: 16 }}>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textMuted }}>
+                    Todavía no creaste categorías propias. Tocá "+" para sumar una.
+                  </Text>
                 </View>
-
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.textPrimary }}>
-                      {cat.name}
-                    </Text>
-                    {cat.userId === null && (
-                      <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}>
-                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 9, color: '#2563EB' }}>GLOBAL</Text>
+              ) : (
+                personalCategories.map((cat) => {
+                  const catColor = getCategoryColor(cat.icon, cat.name);
+                  return (
+                    <View
+                      key={cat.id}
+                      style={{ backgroundColor: colors.bgCard, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 }}
+                    >
+                      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: `${catColor}18`, alignItems: 'center', justifyContent: 'center' }}>
+                        <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: catColor }} />
                       </View>
-                    )}
-                  </View>
-                  <View style={{ backgroundColor: cat.type === 'EXPENSE' ? '#FEF2F2' : '#ECFDF5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start' }}>
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: cat.type === 'EXPENSE' ? '#DC2626' : '#059669' }}>
-                      {cat.type === 'EXPENSE' ? 'Gasto' : 'Ingreso'}
-                    </Text>
-                  </View>
+
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.textPrimary, marginBottom: 3 }}>
+                          {cat.name}
+                        </Text>
+                        <View style={{ backgroundColor: cat.type === 'EXPENSE' ? '#FEF2F2' : '#ECFDF5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start' }}>
+                          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: cat.type === 'EXPENSE' ? '#DC2626' : '#059669' }}>
+                            {cat.type === 'EXPENSE' ? 'Gasto' : 'Ingreso'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        onPress={() => openEdit(cat)}
+                        style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: colors.bgSubtle, alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Pencil size={15} color={colors.textSecondary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleDelete(cat)}
+                        style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Trash2 size={15} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+
+            {/* Categorías base (no editables, visibilidad configurable) */}
+            {baseCategories.length > 0 && (
+              <View style={{ gap: 8 }}>
+                <View style={{ paddingHorizontal: 4 }}>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                    Categorías base
+                  </Text>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
+                    Vienen por defecto y no se pueden editar. Podés ocultarlas al cargar gastos.
+                  </Text>
                 </View>
 
-                {/* Only show edit/delete for personal categories */}
-                {cat.userId !== null && (
-                  <>
-                    <TouchableOpacity
-                      onPress={() => openEdit(cat)}
-                      style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: colors.bgSubtle, alignItems: 'center', justifyContent: 'center' }}
+                {baseCategories.map((cat) => {
+                  const catColor = getCategoryColor(cat.icon, cat.name);
+                  const isHidden = Boolean(cat.isHidden);
+                  return (
+                    <View
+                      key={cat.id}
+                      style={{ backgroundColor: colors.bgCard, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 3, elevation: 1 }}
                     >
-                      <Pencil size={15} color={colors.textSecondary} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => handleDelete(cat)}
-                      style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                      <Trash2 size={15} color="#EF4444" />
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
-            );
-          })
+                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, opacity: isHidden ? 0.35 : 0.55 }}>
+                        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: `${catColor}18`, alignItems: 'center', justifyContent: 'center' }}>
+                          <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: catColor }} />
+                        </View>
 
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.textPrimary, marginBottom: 3 }}>
+                            {cat.name}
+                          </Text>
+                          <View style={{ backgroundColor: cat.type === 'EXPENSE' ? '#FEF2F2' : '#ECFDF5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start' }}>
+                            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: cat.type === 'EXPENSE' ? '#DC2626' : '#059669' }}>
+                              {cat.type === 'EXPENSE' ? 'Gasto' : 'Ingreso'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        onPress={() => handleToggleVisibility(cat)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 10,
+                          backgroundColor: isHidden ? colors.bgSubtle : colors.brandLight,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {isHidden ? (
+                          <EyeOff size={16} color={colors.textMuted} />
+                        ) : (
+                          <Eye size={16} color={colors.brand} />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </View>
         )}
       </ScrollView>
 

@@ -36,6 +36,7 @@ interface Category {
   name: string;
   icon: string | null; // stores color hex
   type: 'INCOME' | 'EXPENSE';
+  isHidden?: boolean;
 }
 
 export const AddTransactionScreen: React.FC = () => {
@@ -161,7 +162,7 @@ export const AddTransactionScreen: React.FC = () => {
       const res = await apiClient.get('/categories');
       setCategories(res.data);
       if (!selectedCategoryId) {
-        const firstMatching = res.data.find((c: Category) => c.type === type);
+        const firstMatching = res.data.find((c: Category) => c.type === type && !c.isHidden);
         if (firstMatching) {
           setSelectedCategoryId(firstMatching.id);
         }
@@ -173,7 +174,9 @@ export const AddTransactionScreen: React.FC = () => {
     }
   };
 
-  const filteredCategories = categories.filter((c) => c.type === type);
+  const filteredCategories = categories.filter(
+    (c) => c.type === type && (!c.isHidden || (isEditing && c.id === selectedCategoryId)),
+  );
 
   const handleDelete = () => {
     Alert.alert(

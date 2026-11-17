@@ -41,6 +41,7 @@ interface Category {
   name: string;
   icon: string | null;
   type: 'INCOME' | 'EXPENSE';
+  isHidden?: boolean;
 }
 
 interface ParticipantSplit {
@@ -108,7 +109,9 @@ export const AddGroupExpenseScreen: React.FC = () => {
           amount: '',
         })));
 
-        const expenseCats = (catsRes.data as Category[]).filter((c) => c.type === 'EXPENSE');
+        const expenseCats = (catsRes.data as Category[]).filter(
+          (c) => c.type === 'EXPENSE' && !c.isHidden,
+        );
         setCategories(expenseCats);
         const otros = expenseCats.find((c) => c.name === 'Otros');
         if (otros) {

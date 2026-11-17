@@ -50,6 +50,7 @@ model User {
   splitsOwed           ExpenseSplit[]
   notifications        Notification[]
   passwordResetTokens  PasswordResetToken[]
+  hiddenCategories     HiddenCategory[]
 }
 
 // ==========================================
@@ -71,8 +72,20 @@ model Category {
   transactions  Transaction[]
   budgets       Budget[]
   groupExpenses GroupExpense[]
+  hiddenByUsers HiddenCategory[]
 
   @@index([userId, isDeleted])
+}
+
+model HiddenCategory {
+  userId     String
+  categoryId String
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([userId, categoryId])
 }
 
 model Transaction {

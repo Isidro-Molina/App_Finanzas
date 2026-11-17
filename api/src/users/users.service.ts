@@ -309,6 +309,7 @@ export class UsersService {
       });
       await tx.budget.deleteMany({ where: { userId: id } });
       await tx.transaction.deleteMany({ where: { userId: id } });
+      await tx.hiddenCategory.deleteMany({ where: { userId: id } });
 
       // Desvincular gastos grupales que apunten a categorías personalizadas del usuario antes de borrarlas
       await tx.groupExpense.updateMany({

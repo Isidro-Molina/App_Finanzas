@@ -44,6 +44,7 @@ describe('UsersService - Perfiles y eliminación segura de cuenta', () => {
       passwordResetToken: { deleteMany: jest.fn() },
       budget: { deleteMany: jest.fn() },
       transaction: { deleteMany: jest.fn() },
+      hiddenCategory: { deleteMany: jest.fn() },
       category: { deleteMany: jest.fn() },
       $transaction: jest.fn((cb: (tx: any) => unknown) => cb(mockPrisma)),
     };
