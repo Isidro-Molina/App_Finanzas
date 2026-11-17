@@ -98,8 +98,8 @@ export const ManageCategoriesScreen: React.FC = () => {
           type: editType,
         });
       }
+      await fetchCategories();
       setModalVisible(false);
-      fetchCategories();
     } catch (e: any) {
       const msg = e.response?.data?.message || 'Error al guardar';
       Alert.alert('Error', Array.isArray(msg) ? msg[0] : msg);
@@ -249,15 +249,27 @@ export const ManageCategoriesScreen: React.FC = () => {
       </ScrollView>
 
       {/* Create/Edit Modal */}
-      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }} onPress={() => setModalVisible(false)}>
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => { if (!saving) setModalVisible(false); }}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}
+          onPress={() => { if (!saving) setModalVisible(false); }}
+        >
           <Pressable style={{ backgroundColor: colors.bgCard, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.08, shadowRadius: 16, elevation: 10 }} onPress={() => {}}>
 
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: colors.textPrimary }}>
                 {editingCategory ? 'Editar categoría' : 'Nueva categoría'}
               </Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                disabled={saving}
+                style={{ opacity: saving ? 0.4 : 1 }}
+              >
                 <X size={22} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
@@ -301,7 +313,7 @@ export const ManageCategoriesScreen: React.FC = () => {
             <TouchableOpacity
               onPress={handleSave}
               disabled={saving}
-              style={{ backgroundColor: colors.brand, borderRadius: 14, paddingVertical: 16, alignItems: 'center', shadowColor: colors.brand, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 4 }}
+              style={{ backgroundColor: colors.brand, borderRadius: 14, paddingVertical: 16, alignItems: 'center', shadowColor: colors.brand, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 4, opacity: saving ? 0.7 : 1 }}
             >
               {saving ? <Spinner size={18} color="#fff" /> : <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>{editingCategory ? 'Guardar cambios' : 'Crear categoría'}</Text>}
             </TouchableOpacity>

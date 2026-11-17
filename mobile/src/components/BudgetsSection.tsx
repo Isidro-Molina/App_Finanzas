@@ -35,7 +35,7 @@ interface Props {
   budgets: BudgetItem[];
   month: number;
   year: number;
-  onChanged: () => void;
+  onChanged: () => Promise<void> | void;
 }
 
 export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChanged }) => {
@@ -46,6 +46,7 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const openModal = async () => {
     setCategoryId(null);
@@ -72,8 +73,8 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
     setSaving(true);
     try {
       await apiClient.post('/budgets', { categoryId, amount: value.toFixed(2), month, year });
+      await Promise.resolve(onChanged());
       setIsOpen(false);
-      onChanged();
     } catch (e: any) {
       const msg = e.response?.data?.message || 'No se pudo guardar el presupuesto';
       Alert.alert('Error', Array.isArray(msg) ? msg[0] : msg);
@@ -89,12 +90,15 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
         text: 'Eliminar',
         style: 'destructive',
         onPress: async () => {
+          setDeletingId(b.id);
           try {
             await apiClient.delete(`/budgets/${b.id}`);
-            onChanged();
+            await Promise.resolve(onChanged());
           } catch (e: any) {
             const msg = e.response?.data?.message || 'No se pudo eliminar el presupuesto';
             Alert.alert('Error', Array.isArray(msg) ? msg[0] : msg);
+          } finally {
+            setDeletingId(null);
           }
         },
       },
@@ -131,8 +135,16 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
             <View key={b.id} style={{ backgroundColor: colors.bgCard, borderRadius: 14, padding: 14, marginBottom: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: isDark ? 0.2 : 0.05, shadowRadius: 3, elevation: 1 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.textPrimary }}>{b.category.name}</Text>
-                <TouchableOpacity onPress={() => handleDelete(b)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Trash2 size={15} color={colors.textMuted} />
+                <TouchableOpacity
+                  onPress={() => handleDelete(b)}
+                  disabled={deletingId === b.id}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  {deletingId === b.id ? (
+                    <Spinner size={15} color={colors.textMuted} />
+                  ) : (
+                    <Trash2 size={15} color={colors.textMuted} />
+                  )}
                 </TouchableOpacity>
               </View>
               <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.bgSubtle, overflow: 'hidden' }}>
@@ -151,14 +163,27 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
         })
       )}
 
-      <Modal visible={isOpen} transparent animationType="fade" onRequestClose={() => setIsOpen(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 24 }} onPress={() => setIsOpen(false)}>
+      <Modal
+        visible={isOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { if (!saving) setIsOpen(false); }}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 24 }}
+          onPress={() => { if (!saving) setIsOpen(false); }}
+        >
           <Pressable style={{ backgroundColor: colors.bgCard, borderRadius: 24, padding: 24 }} onPress={() => {}}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: colors.textPrimary }}>
                 Límite de gasto por categoría
               </Text>
-              <TouchableOpacity onPress={() => setIsOpen(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <TouchableOpacity
+                onPress={() => setIsOpen(false)}
+                disabled={saving}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={{ opacity: saving ? 0.4 : 1 }}
+              >
                 <X size={20} color="#EF4444" />
               </TouchableOpacity>
             </View>
@@ -175,8 +200,9 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
                   return (
                     <TouchableOpacity
                       key={c.id}
+                      disabled={saving}
                       onPress={() => setCategoryId(c.id)}
-                      style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: selected ? colors.brand : colors.bgInput, borderWidth: 1, borderColor: selected ? colors.brand : colors.border }}
+                      style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: selected ? colors.brand : colors.bgInput, borderWidth: 1, borderColor: selected ? colors.brand : colors.border, opacity: saving ? 0.6 : 1 }}
                     >
                       <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: selected ? '#fff' : colors.textPrimary }}>{c.name}</Text>
                     </TouchableOpacity>
@@ -189,14 +215,37 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
             <TextInput
               value={amount}
               onChangeText={(text) => setAmount(formatAmountInput(text))}
+              editable={!saving}
               placeholder="Ej: 50.000"
               placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
-              style={{ borderWidth: 1.5, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter_400Regular', color: colors.textPrimary, backgroundColor: colors.bgInput, marginBottom: 18 }}
+              style={{ borderWidth: 1.5, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter_400Regular', color: colors.textPrimary, backgroundColor: colors.bgInput, marginBottom: 18, opacity: saving ? 0.6 : 1 }}
             />
 
-            <TouchableOpacity onPress={handleSave} disabled={saving} style={{ width: '100%', paddingVertical: 14, backgroundColor: colors.brand, borderRadius: 14, alignItems: 'center' }}>
-              {saving ? <Spinner size={18} color="#fff" /> : <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' }}>Guardar límite</Text>}
+            <TouchableOpacity
+              onPress={handleSave}
+              disabled={saving}
+              accessibilityState={{ disabled: saving }}
+              style={{
+                width: '100%',
+                paddingVertical: 14,
+                backgroundColor: colors.brand,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 8,
+                opacity: saving ? 0.7 : 1,
+              }}
+            >
+              {saving ? (
+                <>
+                  <Spinner size={18} color="#fff" />
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' }}>Guardando límite...</Text>
+                </>
+              ) : (
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' }}>Guardar límite</Text>
+              )}
             </TouchableOpacity>
           </Pressable>
         </Pressable>
