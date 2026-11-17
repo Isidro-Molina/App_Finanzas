@@ -11,7 +11,9 @@ import {
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { Throttle } from '@nestjs/throttler';
 
 /**
  * UsersController — Gestión del perfil de usuario.
@@ -27,6 +29,11 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Get('me/deletion-check')
+  getDeletionCheck(@Request() req: { user: { userId: string } }) {
+    return this.usersService.getDeletionBlockers(req.user.userId);
+  }
 
   @Get(':id')
   findOne(
@@ -66,8 +73,12 @@ export class UsersController {
    * DELETE /api/v1/users/me
    * El usuario solo puede eliminar su propia cuenta.
    */
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Delete('me')
-  remove(@Request() req: { user: { userId: string } }) {
-    return this.usersService.remove(req.user.userId);
+  remove(
+    @Request() req: { user: { userId: string } },
+    @Body() dto: DeleteAccountDto,
+  ) {
+    return this.usersService.remove(req.user.userId, dto);
   }
 }

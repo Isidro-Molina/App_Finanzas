@@ -1,4 +1,9 @@
-import { ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  BadRequestException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { UsersService } from './users.service';
 
 describe('UsersService - Perfiles y eliminación segura de cuenta', () => {
@@ -127,10 +132,80 @@ describe('UsersService - Perfiles y eliminación segura de cuenta', () => {
         },
       ]);
 
-      await expect(service.remove('user-1')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.remove('user-1', { confirmation: 'ELIMINAR' }),
+      ).rejects.toThrow(BadRequestException);
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('debe rechazar la baja si confirmation no es ELIMINAR', async () => {
+      await expect(
+        service.remove('user-1', { confirmation: 'eliminar' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('debe rechazar con UnauthorizedException si el usuario tiene contraseña y no coincide', async () => {
+      const hash = await bcrypt.hash('correcta123', 4);
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        passwordHash: hash,
+        isDeleted: false,
+      });
+
+      await expect(
+        service.remove('user-1', {
+          confirmation: 'ELIMINAR',
+          password: 'incorrecta',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('debe permitir la baja a cuentas Google sin passwordHash con confirmation ELIMINAR', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user-google',
+        passwordHash: '',
+        isDeleted: false,
+      });
+      mockPrisma.group.findMany.mockResolvedValue([]);
+
+      const res = await service.remove('user-google', {
+        confirmation: 'ELIMINAR',
+      });
+      expect(res.message).toBe('Cuenta eliminada correctamente');
+      expect(mockPrisma.user.delete).toHaveBeenCalledWith({
+        where: { id: 'user-google' },
+      });
+    });
+
+    it('getDeletionBlockers debe devolver deudas por grupo y hasPassword', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        passwordHash: 'hash',
+        isDeleted: false,
+      });
+      mockPrisma.groupMember.findMany.mockResolvedValue([
+        {
+          groupId: 'group-1',
+          group: {
+            id: 'group-1',
+            name: 'Asado',
+            members: [{ userId: 'user-2', status: 'ACTIVE' }],
+            expenses: [
+              {
+                paidById: 'user-2',
+                splits: [{ userId: 'user-1', amountOwed: 500, isPaid: false }],
+              },
+            ],
+          },
+        },
+      ]);
+
+      const check = await service.getDeletionBlockers('user-1');
+      expect(check.canDelete).toBe(false);
+      expect(check.hasPassword).toBe(true);
+      expect(check.blockers).toHaveLength(1);
+      expect(check.blockers[0].groupName).toBe('Asado');
     });
 
     it('debe reasignar el grupo compartido, NO borrar gastos grupales y anonimizar al usuario si tiene historial en grupos', async () => {
@@ -151,7 +226,7 @@ describe('UsersService - Perfiles y eliminación segura de cuenta', () => {
       // Tiene 1 gasto pagado en el grupo compartido
       mockPrisma.groupExpense.count.mockResolvedValue(1);
 
-      await service.remove('user-1');
+      await service.remove('user-1', { confirmation: 'ELIMINAR' });
 
       // Verifica que reasigne a active-member-2
       expect(mockPrisma.group.update).toHaveBeenCalledWith({
@@ -203,7 +278,7 @@ describe('UsersService - Perfiles y eliminación segura de cuenta', () => {
       mockPrisma.expenseSplit.count.mockResolvedValue(0);
       mockPrisma.group.count.mockResolvedValue(0);
 
-      await service.remove('user-1');
+      await service.remove('user-1', { confirmation: 'ELIMINAR' });
 
       expect(mockPrisma.group.delete).toHaveBeenCalledWith({
         where: { id: 'group-empty' },

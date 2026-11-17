@@ -9,6 +9,7 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -173,17 +174,19 @@ export class UsersService {
   }
 
   /**
-   * Elimina la cuenta del usuario autenticado:
-   * - Bloquea la baja si el usuario mantiene saldos pendientes (a favor o en contra) en grupos compartidos.
-   * - Elimina todos sus datos personales (transacciones, presupuestos, categorías personales, notificaciones, tokens).
-   * - Elimina grupos individuales donde el usuario era el único miembro activo.
-   * - En grupos compartidos con otros miembros activos, preserva el historial de gastos grupales (GroupExpense y ExpenseSplit)
-   *   anonimizando la cuenta (isDeleted = true, email liberado, passwordHash vacío) pero conservando el nombre para el registro histórico.
+   * Verifica si el usuario tiene bloqueadores (saldos pendientes en grupos compartidos)
+   * y si su cuenta requiere contraseña para confirmar la baja.
    */
-  async remove(id: string) {
-    await this.findById(id);
+  async getDeletionBlockers(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, isDeleted: true, passwordHash: true },
+    });
 
-    // 1. Verificar que no tenga saldos pendientes en grupos compartidos con otros miembros activos
+    if (!user || user.isDeleted) {
+      throw new NotFoundException(`Usuario con id "${id}" no encontrado`);
+    }
+
     const activeMemberships = await this.prisma.groupMember.findMany({
       where: { userId: id, status: 'ACTIVE' },
       include: {
@@ -201,6 +204,13 @@ export class UsersService {
         },
       },
     });
+
+    const blockers: Array<{
+      groupId: string;
+      groupName: string;
+      net: number;
+      message: string;
+    }> = [];
 
     for (const membership of activeMemberships) {
       const group = membership.group;
@@ -221,15 +231,70 @@ export class UsersService {
 
       const roundedNet = +net.toFixed(2);
       if (roundedNet < -0.01) {
-        throw new BadRequestException(
-          `No podés eliminar tu cuenta porque tenés una deuda pendiente de $${Math.abs(roundedNet).toLocaleString('es-AR')} en el grupo "${group.name}". Saldá tus deudas grupales primero.`,
+        blockers.push({
+          groupId: group.id,
+          groupName: group.name,
+          net: roundedNet,
+          message: `No podés eliminar tu cuenta porque tenés una deuda pendiente de $${Math.abs(roundedNet).toLocaleString('es-AR')} en el grupo "${group.name}". Saldá tus deudas grupales primero.`,
+        });
+      } else if (roundedNet > 0.01) {
+        blockers.push({
+          groupId: group.id,
+          groupName: group.name,
+          net: roundedNet,
+          message: `No podés eliminar tu cuenta porque en el grupo "${group.name}" te deben $${roundedNet.toLocaleString('es-AR')}. Marcá los pagos pendientes antes de darte de baja.`,
+        });
+      }
+    }
+
+    return {
+      canDelete: blockers.length === 0,
+      hasPassword: Boolean(user.passwordHash),
+      blockers,
+    };
+  }
+
+  /**
+   * Elimina la cuenta del usuario autenticado:
+   * - Exige confirmación explícita ("ELIMINAR") y contraseña actual si la cuenta tiene passwordHash.
+   * - Bloquea la baja si el usuario mantiene saldos pendientes (a favor o en contra) en grupos compartidos.
+   * - Elimina todos sus datos personales (transacciones, presupuestos, categorías personales, notificaciones, tokens).
+   * - Elimina grupos individuales donde el usuario era el único miembro activo.
+   * - En grupos compartidos con otros miembros activos, preserva el historial de gastos grupales (GroupExpense y ExpenseSplit)
+   *   anonimizando la cuenta (isDeleted = true, email liberado, passwordHash vacío) pero conservando el nombre para el registro histórico.
+   */
+  async remove(id: string, dto: DeleteAccountDto) {
+    if (!dto || dto.confirmation !== 'ELIMINAR') {
+      throw new BadRequestException(
+        'Debés escribir ELIMINAR para confirmar la baja de tu cuenta',
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, isDeleted: true, passwordHash: true },
+    });
+
+    if (!user || user.isDeleted) {
+      throw new NotFoundException(`Usuario con id "${id}" no encontrado`);
+    }
+
+    if (user.passwordHash) {
+      if (!dto.password) {
+        throw new UnauthorizedException(
+          'Ingresá tu contraseña actual para confirmar la eliminación',
         );
       }
-      if (roundedNet > 0.01) {
-        throw new BadRequestException(
-          `No podés eliminar tu cuenta porque en el grupo "${group.name}" te deben $${roundedNet.toLocaleString('es-AR')}. Marcá los pagos pendientes antes de darte de baja.`,
-        );
+      const valid = await bcrypt.compare(dto.password, user.passwordHash);
+      if (!valid) {
+        throw new UnauthorizedException('La contraseña actual es incorrecta');
       }
+    }
+
+    // 1. Verificar que no tenga saldos pendientes en grupos compartidos con otros miembros activos
+    const { blockers } = await this.getDeletionBlockers(id);
+    if (blockers.length > 0) {
+      throw new BadRequestException(blockers[0].message);
     }
 
     await this.prisma.$transaction(async (tx) => {

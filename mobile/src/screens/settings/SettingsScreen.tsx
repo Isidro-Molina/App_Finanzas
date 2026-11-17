@@ -60,7 +60,7 @@ const Toggle = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
 export const SettingsScreen = () => {
   const { user, logout, biometricEnabled, enableBiometric, disableBiometric, isBiometricAvailable } = useAuth();
   const { colors, isDark, toggleTheme } = useTheme();
-  const { showAlert, showConfirm } = useDialog();
+  const { showAlert } = useDialog();
   const navigation = useNavigation<any>();
   const [notifications, setNotifications] = useState(true);
   const [helpVisible, setHelpVisible] = useState(false);
@@ -96,40 +96,8 @@ export const SettingsScreen = () => {
     }
   };
 
-  const [deletingAccount, setDeletingAccount] = useState(false);
-
-  const handleDeleteAccount = async () => {
-    const first = await showConfirm({
-      title: 'Eliminar cuenta',
-      message:
-        '¿Estás seguro de que querés eliminar tu cuenta? Se borrarán todos tus datos y gastos personales (el historial de gastos en grupos compartidos se mantendrá para los demás miembros).',
-      confirmText: 'Continuar',
-      destructive: true,
-    });
-    if (!first) return;
-
-    const second = await showConfirm({
-      title: 'Confirmación final',
-      message: 'Esta acción NO se puede deshacer. ¿Realmente querés eliminar tu cuenta de forma permanente?',
-      confirmText: 'Sí, eliminar mi cuenta',
-      destructive: true,
-    });
-    if (!second) return;
-
-    setDeletingAccount(true);
-    try {
-      await apiClient.delete('/users/me');
-      await disableBiometric();
-      await logout();
-    } catch (e: any) {
-      const msg = e.response?.data?.message || 'Error al eliminar la cuenta';
-      await showAlert({
-        title: 'Error',
-        message: Array.isArray(msg) ? msg[0] : msg,
-      });
-    } finally {
-      setDeletingAccount(false);
-    }
+  const handleDeleteAccount = () => {
+    navigation.navigate('DeleteAccount');
   };
 
   const [exportingCsv, setExportingCsv] = useState(false);
@@ -326,16 +294,26 @@ export const SettingsScreen = () => {
           </View>
         </View>
 
-        {/* Danger */}
-        <View style={{ paddingHorizontal: 20, paddingBottom: 24 }}>
+        {/* Sesión */}
+        <View style={{ paddingHorizontal: 20, paddingBottom: 32 }}>
           <View style={cardStyle}>
-            <Row icon={LogOut} label="Cerrar sesión" danger border onPress={logout} />
+            <Row icon={LogOut} label="Cerrar sesión" border={false} onPress={logout} />
+          </View>
+        </View>
+
+        {/* Zona de peligro */}
+        <View style={{ paddingHorizontal: 20, paddingBottom: 24 }}>
+          <SectionTitle label="Zona de peligro" />
+          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted, marginBottom: 10, paddingHorizontal: 4 }}>
+            Esta acción elimina tu cuenta y todos tus datos personales de forma permanente.
+          </Text>
+          <View style={cardStyle}>
             <Row
               icon={Trash2}
-              label={deletingAccount ? 'Eliminando cuenta...' : 'Eliminar cuenta'}
+              label="Eliminar cuenta"
               danger
               border={false}
-              onPress={deletingAccount ? undefined : handleDeleteAccount}
+              onPress={handleDeleteAccount}
             />
           </View>
         </View>
