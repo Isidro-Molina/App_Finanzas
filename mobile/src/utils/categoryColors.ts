@@ -1,3 +1,14 @@
+export const CATEGORY_PRESET_COLORS = [
+  '#2563EB', // Azul
+  '#7C3AED', // Violeta
+  '#DB2777', // Rosa
+  '#059669', // Verde
+  '#EA580C', // Naranja
+  '#0891B2', // Cyan
+  '#DC2626', // Rojo
+  '#64748B', // Gris
+];
+
 const PALETTE = [
   '#2563EB', // Azul
   '#7C3AED', // Violeta

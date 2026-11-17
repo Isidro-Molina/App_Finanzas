@@ -12,12 +12,13 @@ import {
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import apiClient from '../../api/client';
-import { ArrowLeft, Plus, Pencil, Trash2, Check, X, Eye, EyeOff } from 'lucide-react-native';
+import { ArrowLeft, Plus, Pencil, Trash2, X, Eye, EyeOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../context/ThemeContext';
 import { useDialog } from '../../context/DialogContext';
 import { Spinner } from '../../components/Spinner';
-import { getCategoryColor } from '../../utils/categoryColors';
+import { ColorPicker } from '../../components/ColorPicker';
+import { CATEGORY_PRESET_COLORS, getCategoryColor } from '../../utils/categoryColors';
 
 interface Category {
   id: string;
@@ -27,12 +28,6 @@ interface Category {
   userId: string | null; // null = global category
   isHidden?: boolean;
 }
-
-const COLOR_OPTIONS = [
-  '#2563EB', '#7C3AED', '#DB2777', '#059669',
-  '#D97706', '#0891B2', '#DC2626', '#65A30D',
-  '#9333EA', '#0F172A', '#64748B', '#EA580C',
-];
 
 export const ManageCategoriesScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -48,7 +43,7 @@ export const ManageCategoriesScreen: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editName, setEditName] = useState('');
-  const [editColor, setEditColor] = useState(COLOR_OPTIONS[0]);
+  const [editColor, setEditColor] = useState(CATEGORY_PRESET_COLORS[0]);
   const [editType, setEditType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
   const [saving, setSaving] = useState(false);
 
@@ -69,7 +64,7 @@ export const ManageCategoriesScreen: React.FC = () => {
   const openCreate = () => {
     setEditingCategory(null);
     setEditName('');
-    setEditColor(COLOR_OPTIONS[0]);
+    setEditColor(CATEGORY_PRESET_COLORS[0]);
     setEditType('EXPENSE');
     setModalVisible(true);
   };
@@ -77,7 +72,7 @@ export const ManageCategoriesScreen: React.FC = () => {
   const openEdit = (cat: Category) => {
     setEditingCategory(cat);
     setEditName(cat.name);
-    setEditColor(cat.icon && cat.icon.startsWith('#') ? cat.icon : COLOR_OPTIONS[0]);
+    setEditColor(cat.icon && cat.icon.startsWith('#') ? cat.icon : CATEGORY_PRESET_COLORS[0]);
     setEditType(cat.type);
     setModalVisible(true);
   };
@@ -402,16 +397,12 @@ export const ManageCategoriesScreen: React.FC = () => {
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>
               Color
             </Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>
-              {COLOR_OPTIONS.map((color) => (
-                <TouchableOpacity
-                  key={color}
-                  onPress={() => setEditColor(color)}
-                  style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: color, alignItems: 'center', justifyContent: 'center', borderWidth: editColor === color ? 3 : 0, borderColor: '#fff', shadowColor: color, shadowOffset: { width: 0, height: 2 }, shadowOpacity: editColor === color ? 0.5 : 0, shadowRadius: 6, elevation: editColor === color ? 3 : 0 }}
-                >
-                  {editColor === color && <Check size={16} color="#fff" strokeWidth={3} />}
-                </TouchableOpacity>
-              ))}
+            <View style={{ marginBottom: 24 }}>
+              <ColorPicker
+                value={editColor}
+                onChange={setEditColor}
+                disabled={saving}
+              />
             </View>
 
             <TouchableOpacity
