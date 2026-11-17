@@ -5,27 +5,32 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
   Alert,
   Platform,
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import apiClient from '../../api/client';
-import { ArrowLeft, Calendar, Clock, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, Calendar, Clock, Trash2, RefreshCw } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { formatCurrency } from '../../utils/currency';
+import { Spinner } from '../../components/Spinner';
+import { awaitDashboardRefresh } from '../../utils/syncEvents';
+import { getCategoryColor } from '../../utils/categoryColors';
+import {
+  RATE_OPTIONS,
+  RateOptionCode,
+  ExchangeRateItem,
+  fetchExchangeRates,
+  getRateMeta,
+  formatForeignAmount,
+} from '../../utils/exchangeRates';
 
 interface Category {
   id: string;
   name: string;
   icon: string | null; // stores color hex
   type: 'INCOME' | 'EXPENSE';
-}
-
-function getCategoryColor(icon: string | null, index: number): string {
-  const palette = ['#2563EB', '#7C3AED', '#DB2777', '#059669', '#D97706', '#0891B2', '#DC2626', '#65A30D'];
-  if (icon && icon.startsWith('#')) return icon;
-  return palette[index % palette.length];
 }
 
 export const AddTransactionScreen: React.FC = () => {
@@ -36,16 +41,50 @@ export const AddTransactionScreen: React.FC = () => {
   const transaction = route.params?.transaction;
   const isEditing = Boolean(transaction?.id);
 
+  const initialRateCode: RateOptionCode =
+    transaction?.rateType && RATE_OPTIONS.some((r) => r.code === transaction.rateType)
+      ? (transaction.rateType as RateOptionCode)
+      : transaction?.currency === 'EUR'
+        ? 'EUR'
+        : transaction?.currency === 'USD'
+          ? 'TARJETA'
+          : 'ARS';
+
   const [type, setType] = useState<'EXPENSE' | 'INCOME'>(
     transaction?.type === 'INCOME' ? 'INCOME' : 'EXPENSE'
   );
+  const [rateOption, setRateOption] = useState<RateOptionCode>(initialRateCode);
+  const [inputInArs, setInputInArs] = useState<boolean>(false);
+  const [ratesMap, setRatesMap] = useState<Record<string, ExchangeRateItem>>({});
+  const [loadingRates, setLoadingRates] = useState(false);
+  const [customRate, setCustomRate] = useState(
+    transaction?.exchangeRate ? String(Number(transaction.exchangeRate)) : ''
+  );
   const [amount, setAmount] = useState(
-    transaction?.amount ? String(Math.abs(Number(transaction.amount))) : ''
+    transaction?.originalAmount && initialRateCode !== 'ARS'
+      ? String(Math.abs(Number(transaction.originalAmount)))
+      : transaction?.amount
+        ? String(Math.abs(Number(transaction.amount)))
+        : ''
   );
   const [description, setDescription] = useState(transaction?.description || '');
-  const [selectedDate, setSelectedDate] = useState(
-    transaction?.date ? new Date(transaction.date) : new Date()
-  );
+  const [selectedDate, setSelectedDate] = useState(() => {
+    if (transaction?.date) return new Date(transaction.date);
+    const now = new Date();
+    const initMonth = route.params?.initialMonth;
+    const initYear = route.params?.initialYear;
+    if (
+      typeof initMonth === 'number' &&
+      typeof initYear === 'number' &&
+      (initMonth !== now.getMonth() + 1 || initYear !== now.getFullYear())
+    ) {
+      const maxDayInMonth = new Date(initYear, initMonth, 0).getDate();
+      const safeDay = Math.min(now.getDate(), maxDayInMonth);
+      return new Date(initYear, initMonth - 1, safeDay, now.getHours(), now.getMinutes());
+    }
+    return now;
+  });
+  const [maxPickerDate] = useState(() => new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -59,11 +98,58 @@ export const AddTransactionScreen: React.FC = () => {
   const formattedDate = selectedDate.toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
   const formattedTime = selectedDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
 
+  const loadRates = async (selectedCode: RateOptionCode = rateOption) => {
+    setLoadingRates(true);
+    try {
+      const map = await fetchExchangeRates();
+      setRatesMap(map);
+      if (selectedCode !== 'ARS' && map[selectedCode]?.sell && !customRate) {
+        setCustomRate(String(map[selectedCode].sell));
+      }
+    } finally {
+      setLoadingRates(false);
+    }
+  };
+
   useFocusEffect(
     React.useCallback(() => {
       fetchCategories();
+      loadRates(rateOption);
     }, [])
   );
+
+  const handleSelectRateOption = (code: RateOptionCode) => {
+    setRateOption(code);
+    if (code === 'ARS') {
+      setCustomRate('');
+      setInputInArs(false);
+      return;
+    }
+    const liveRate = ratesMap[code]?.sell;
+    if (liveRate) {
+      setCustomRate(String(liveRate));
+    } else {
+      loadRates(code).then(() => {});
+    }
+  };
+
+  const activeRateMeta = getRateMeta(rateOption);
+  const parsedInputAmount = parseFloat(amount.replace(',', '.')) || 0;
+  const parsedExchangeRate = parseFloat(customRate.replace(',', '.')) || 0;
+  const convertedArsAmount =
+    rateOption === 'ARS'
+      ? parsedInputAmount
+      : inputInArs
+        ? parsedInputAmount
+        : +(parsedInputAmount * parsedExchangeRate).toFixed(2);
+  const convertedForeignAmount =
+    rateOption === 'ARS'
+      ? 0
+      : inputInArs
+        ? parsedExchangeRate > 0
+          ? +(parsedInputAmount / parsedExchangeRate).toFixed(2)
+          : 0
+        : parsedInputAmount;
 
   const fetchCategories = async () => {
     try {
@@ -97,6 +183,7 @@ export const AddTransactionScreen: React.FC = () => {
             setDeleting(true);
             try {
               await apiClient.delete(`/transactions/${transaction.id}`);
+              await awaitDashboardRefresh();
               navigation.goBack();
             } catch (e: any) {
               const msg = e.response?.data?.message || 'Error al eliminar la transacción';
@@ -117,15 +204,36 @@ export const AddTransactionScreen: React.FC = () => {
       Alert.alert('Monto inválido', 'Por favor ingresá un monto mayor a cero');
       return;
     }
+    if (rateOption !== 'ARS' && (isNaN(parsedExchangeRate) || parsedExchangeRate <= 0)) {
+      Alert.alert('Cotización inválida', 'Por favor ingresá una cotización válida mayor a cero');
+      return;
+    }
     if (!selectedCategoryId) {
       Alert.alert('Categoría requerida', 'Por favor seleccioná una categoría');
       return;
     }
 
+    const finalArsAmount =
+      rateOption === 'ARS'
+        ? parsedAmount
+        : inputInArs
+          ? parsedAmount
+          : +(parsedAmount * parsedExchangeRate).toFixed(2);
+    const finalForeignAmount =
+      rateOption === 'ARS'
+        ? null
+        : inputInArs
+          ? (parsedAmount / parsedExchangeRate).toFixed(2)
+          : parsedAmount.toFixed(2);
+
     setLoading(true);
     try {
       const payload = {
-        amount: parsedAmount.toFixed(2),
+        amount: finalArsAmount.toFixed(2),
+        currency: activeRateMeta.currency,
+        originalAmount: finalForeignAmount,
+        exchangeRate: rateOption === 'ARS' ? null : parsedExchangeRate.toFixed(2),
+        rateType: rateOption === 'ARS' ? null : rateOption,
         type,
         categoryId: selectedCategoryId,
         description: description.trim() ? description.trim() : isEditing ? null : undefined,
@@ -137,6 +245,7 @@ export const AddTransactionScreen: React.FC = () => {
       } else {
         await apiClient.post('/transactions', payload);
       }
+      await awaitDashboardRefresh();
       navigation.goBack();
     } catch (e: any) {
       const msg = e.response?.data?.message || 'Error al guardar la transacción';
@@ -181,7 +290,7 @@ export const AddTransactionScreen: React.FC = () => {
             style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: '#FEE2E2', borderWidth: 1, borderColor: '#FCA5A5', alignItems: 'center', justifyContent: 'center' }}
           >
             {deleting ? (
-              <ActivityIndicator size="small" color="#DC2626" />
+              <Spinner size={18} color="#DC2626" />
             ) : (
               <Trash2 size={18} color="#DC2626" />
             )}
@@ -219,31 +328,243 @@ export const AddTransactionScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Amount */}
-        <View style={{ ...cardStyle, paddingTop: 20, paddingBottom: 24, paddingHorizontal: 20, alignItems: 'center' }}>
-          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Monto
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 26, color: colors.textMuted, marginRight: 4 }}>$</Text>
+        {/* Amount + Currency / Exchange Rate Card */}
+        <View style={{ ...cardStyle, padding: 18 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 14, color: colors.textPrimary }}>
+              Monto
+            </Text>
+            {rateOption !== 'ARS' && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  backgroundColor: colors.bgInput,
+                  borderRadius: 8,
+                  padding: 2,
+                  borderWidth: 1,
+                  borderColor: colors.borderSubtle,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={() => setInputInArs(false)}
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 6,
+                    backgroundColor: !inputInArs ? colors.brand : 'transparent',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: 'Inter_600SemiBold',
+                      fontSize: 11,
+                      color: !inputInArs ? '#fff' : colors.textMuted,
+                    }}
+                  >
+                    En {activeRateMeta.currency}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setInputInArs(true)}
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 6,
+                    backgroundColor: inputInArs ? colors.brand : 'transparent',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: 'Inter_600SemiBold',
+                      fontSize: 11,
+                      color: inputInArs ? '#fff' : colors.textMuted,
+                    }}
+                  >
+                    En ARS
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+
+          {/* Structured Amount Input Box */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: colors.bgInput,
+              borderWidth: 1.5,
+              borderColor: colors.border,
+              borderRadius: 14,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              marginBottom: 14,
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: colors.brandLight,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 8,
+                marginRight: 12,
+                borderWidth: 1,
+                borderColor: `${colors.brand}25`,
+              }}
+            >
+              <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 14, color: colors.brand }}>
+                {rateOption === 'ARS' || inputInArs ? 'ARS $' : activeRateMeta.symbol}
+              </Text>
+            </View>
             <TextInput
               value={amount}
               onChangeText={setAmount}
-              placeholder="0"
+              placeholder="0,00"
               placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
               autoFocus
               style={{
-                fontFamily: 'Outfit_800ExtraBold',
-                fontSize: 56,
+                flex: 1,
+                fontFamily: 'Outfit_700Bold',
+                fontSize: 28,
                 color: colors.textPrimary,
-                letterSpacing: -1,
-                minWidth: 100,
-                textAlign: 'center',
+                textAlign: 'right',
                 padding: 0,
               }}
             />
           </View>
+
+          {/* Currency / Rate Type Tags (wrapped grid matching Categories) */}
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Cotización
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {RATE_OPTIONS.map((opt) => {
+              const isSelected = rateOption === opt.code;
+              const liveQuote = opt.code !== 'ARS' ? ratesMap[opt.code]?.sell : null;
+              return (
+                <TouchableOpacity
+                  key={opt.code}
+                  onPress={() => handleSelectRateOption(opt.code)}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 10,
+                    borderWidth: 1.5,
+                    borderColor: isSelected ? colors.brand : colors.border,
+                    backgroundColor: isSelected ? colors.brandLight : colors.bgInput,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: isSelected ? 'Inter_600SemiBold' : 'Inter_400Regular',
+                      fontSize: 12,
+                      color: isSelected ? colors.brand : colors.textSecondary,
+                    }}
+                  >
+                    {opt.shortLabel}
+                  </Text>
+                  {liveQuote ? (
+                    <Text
+                      style={{
+                        fontFamily: 'Inter_500Medium',
+                        fontSize: 11,
+                        color: isSelected ? colors.brand : colors.textMuted,
+                      }}
+                    >
+                      ${Math.round(liveQuote).toLocaleString('es-AR')}
+                    </Text>
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Live Exchange Rate & Bidirectional Conversion Box when non-ARS is selected */}
+          {rateOption !== 'ARS' && (
+            <View
+              style={{
+                marginTop: 14,
+                padding: 12,
+                borderRadius: 12,
+                backgroundColor: colors.bgInput,
+                borderWidth: 1,
+                borderColor: `${colors.brand}30`,
+                gap: 8,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                  <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: colors.textSecondary }}>
+                    TC {activeRateMeta.shortLabel}:
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => loadRates(rateOption)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <RefreshCw size={13} color={colors.brand} />
+                  </TouchableOpacity>
+                </View>
+
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: colors.bgCard,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderRadius: 8,
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                  }}
+                >
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.textMuted, marginRight: 2 }}>
+                    $
+                  </Text>
+                  <TextInput
+                    value={customRate}
+                    onChangeText={setCustomRate}
+                    keyboardType="decimal-pad"
+                    placeholder={loadingRates ? '...' : '0'}
+                    placeholderTextColor={colors.textMuted}
+                    style={{
+                      fontFamily: 'Inter_600SemiBold',
+                      fontSize: 13,
+                      color: colors.textPrimary,
+                      minWidth: 56,
+                      textAlign: 'right',
+                      padding: 0,
+                    }}
+                  />
+                </View>
+              </View>
+
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingTop: 8,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.borderSubtle,
+                }}
+              >
+                <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: colors.textMuted }}>
+                  {inputInArs
+                    ? `Equivalente en ${activeRateMeta.currency}`
+                    : 'Equivalente en Pesos (ARS)'}
+                </Text>
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: colors.brand }}>
+                  {inputInArs
+                    ? formatForeignAmount(convertedForeignAmount, activeRateMeta.currency)
+                    : formatCurrency(convertedArsAmount)}
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Category grid — tags with color */}
@@ -260,15 +581,17 @@ export const AddTransactionScreen: React.FC = () => {
           </View>
 
           {fetchingCategories ? (
-            <ActivityIndicator color={colors.brand} style={{ marginVertical: 20 }} />
+            <View style={{ alignItems: 'center', marginVertical: 20 }}>
+              <Spinner size={24} color={colors.brand} />
+            </View>
           ) : filteredCategories.length === 0 ? (
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textMuted, textAlign: 'center', paddingVertical: 16 }}>
               No hay categorías. Creá una nueva con el botón de arriba.
             </Text>
           ) : (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {filteredCategories.map((cat, idx) => {
-                const catColor = getCategoryColor(cat.icon, idx);
+              {filteredCategories.map((cat) => {
+                const catColor = getCategoryColor(cat.icon, cat.name);
                 const isSelected = selectedCategoryId === cat.id;
                 return (
                   <TouchableOpacity
@@ -334,7 +657,7 @@ export const AddTransactionScreen: React.FC = () => {
               value={selectedDate}
               mode="date"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              maximumDate={new Date()}
+              maximumDate={maxPickerDate}
               themeVariant={isDark ? 'dark' : 'light'}
               onChange={(event, date) => {
                 setShowDatePicker(Platform.OS === 'ios');
@@ -390,10 +713,15 @@ export const AddTransactionScreen: React.FC = () => {
             onPress={handleSubmit}
             disabled={loading}
             activeOpacity={0.8}
-            style={{ width: '100%', backgroundColor: colors.brand, borderRadius: 14, paddingVertical: 17, alignItems: 'center', justifyContent: 'center', shadowColor: colors.brand, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 4 }}
+            style={{ width: '100%', backgroundColor: colors.brand, opacity: loading ? 0.85 : 1, borderRadius: 14, paddingVertical: 17, flexDirection: 'row', gap: 10, alignItems: 'center', justifyContent: 'center', shadowColor: colors.brand, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 4 }}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <>
+                <Spinner size={18} color="#fff" />
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>
+                  {isEditing ? 'Actualizando...' : 'Guardando gasto...'}
+                </Text>
+              </>
             ) : (
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>
                 {isEditing ? 'Actualizar Transacción' : 'Guardar Transacción'}

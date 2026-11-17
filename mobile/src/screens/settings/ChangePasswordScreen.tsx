@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  ActivityIndicator, Alert, ScrollView,
+  Alert, ScrollView,
 } from 'react-native';
+import { Spinner } from '../../components/Spinner';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import apiClient from '../../api/client';
@@ -147,7 +148,7 @@ export const ChangePasswordScreen: React.FC = () => {
           style={{ backgroundColor: colors.brand, borderRadius: 14, paddingVertical: 17, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, marginTop: 8, shadowColor: colors.brand, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 4 }}
         >
           {loading
-            ? <ActivityIndicator color="#fff" />
+            ? <Spinner size={18} color="#fff" />
             : <>
                 <Check size={18} color="#fff" />
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>Actualizar Contraseña</Text>

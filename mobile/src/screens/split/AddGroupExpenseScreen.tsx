@@ -5,15 +5,26 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
   Alert,
   Platform,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import apiClient from '../../api/client';
-import { ArrowLeft, Calendar, Clock, Users, Check } from 'lucide-react-native';
+import { ArrowLeft, Calendar, Clock, Users, Check, RefreshCw } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { formatCurrency } from '../../utils/currency';
+import { Spinner } from '../../components/Spinner';
+import { awaitGroupDetailRefresh } from '../../utils/syncEvents';
+import { getCategoryColor } from '../../utils/categoryColors';
+import {
+  RATE_OPTIONS,
+  RateOptionCode,
+  ExchangeRateItem,
+  fetchExchangeRates,
+  getRateMeta,
+  formatForeignAmount,
+} from '../../utils/exchangeRates';
 
 interface Member {
   user: { id: string; name: string; email: string };
@@ -25,12 +36,6 @@ interface Category {
   name: string;
   icon: string | null;
   type: 'INCOME' | 'EXPENSE';
-}
-
-function getCategoryColor(icon: string | null, index: number): string {
-  const palette = ['#2563EB', '#7C3AED', '#DB2777', '#059669', '#D97706', '#0891B2', '#DC2626', '#65A30D'];
-  if (icon && icon.startsWith('#')) return icon;
-  return palette[index % palette.length];
 }
 
 interface ParticipantSplit {
@@ -48,6 +53,11 @@ export const AddGroupExpenseScreen: React.FC = () => {
 
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
+  const [rateOption, setRateOption] = useState<RateOptionCode>('ARS');
+  const [inputInArs, setInputInArs] = useState<boolean>(false);
+  const [ratesMap, setRatesMap] = useState<Record<string, ExchangeRateItem>>({});
+  const [loadingRates, setLoadingRates] = useState(false);
+  const [customRate, setCustomRate] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -62,13 +72,28 @@ export const AddGroupExpenseScreen: React.FC = () => {
   const formattedDate = selectedDate.toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
   const formattedTime = selectedDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
 
+  const loadRates = async (selectedCode: RateOptionCode = rateOption) => {
+    setLoadingRates(true);
+    try {
+      const map = await fetchExchangeRates();
+      setRatesMap(map);
+      if (selectedCode !== 'ARS' && map[selectedCode]?.sell) {
+        setCustomRate(String(map[selectedCode].sell));
+      }
+    } finally {
+      setLoadingRates(false);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [membersRes, catsRes] = await Promise.all([
+        const [membersRes, catsRes, fetchedRates] = await Promise.all([
           apiClient.get(`/groups/${groupId}`),
           apiClient.get('/categories'),
+          fetchExchangeRates(),
         ]);
+        setRatesMap(fetchedRates);
 
         const members: Member[] = membersRes.data.members || [];
         setParticipants(members.map((m) => ({
@@ -95,9 +120,40 @@ export const AddGroupExpenseScreen: React.FC = () => {
     fetchData();
   }, [groupId]);
 
+  const handleSelectRateOption = (code: RateOptionCode) => {
+    setRateOption(code);
+    if (code === 'ARS') {
+      setCustomRate('');
+      setInputInArs(false);
+      return;
+    }
+    const liveRate = ratesMap[code]?.sell;
+    if (liveRate) {
+      setCustomRate(String(liveRate));
+    } else {
+      loadRates(code).then(() => {});
+    }
+  };
+
+  const activeRateMeta = getRateMeta(rateOption);
   const includedParticipants = participants.filter((p) => p.included);
   const includedCount = includedParticipants.length;
-  const totalParsed = parseFloat(amount.replace(',', '.')) || 0;
+  const parsedInputAmount = parseFloat(amount.replace(',', '.')) || 0;
+  const parsedExchangeRate = parseFloat(customRate.replace(',', '.')) || 0;
+  const totalParsed =
+    rateOption === 'ARS'
+      ? parsedInputAmount
+      : inputInArs
+        ? parsedInputAmount
+        : +(parsedInputAmount * parsedExchangeRate).toFixed(2);
+  const convertedForeignAmount =
+    rateOption === 'ARS'
+      ? 0
+      : inputInArs
+        ? parsedExchangeRate > 0
+          ? +(parsedInputAmount / parsedExchangeRate).toFixed(2)
+          : 0
+        : parsedInputAmount;
 
   const getEqualShare = (idx: number) => {
     if (includedCount === 0 || totalParsed === 0) return '0.00';
@@ -123,10 +179,14 @@ export const AddGroupExpenseScreen: React.FC = () => {
 
   const handleSubmit = async () => {
     if (!description.trim()) { Alert.alert('Campo requerido', 'Ingresá una descripción.'); return; }
-    if (!amount || isNaN(totalParsed) || totalParsed <= 0) { Alert.alert('Monto inválido', 'Ingresá un monto mayor a cero.'); return; }
+    if (!amount || isNaN(parsedInputAmount) || parsedInputAmount <= 0) { Alert.alert('Monto inválido', 'Ingresá un monto mayor a cero.'); return; }
+    if (rateOption !== 'ARS' && (isNaN(parsedExchangeRate) || parsedExchangeRate <= 0)) {
+      Alert.alert('Cotización inválida', 'Ingresá una cotización válida mayor a cero.');
+      return;
+    }
     if (includedCount === 0) { Alert.alert('Sin participantes', 'Seleccioná al menos un participante.'); return; }
     if (!splitEqual && !customSumOk) {
-      Alert.alert('Montos incorrectos', `La suma ($${customSum.toFixed(2)}) debe ser igual al total ($${totalParsed.toFixed(2)}).`);
+      Alert.alert('Montos incorrectos', `La suma ($${customSum.toFixed(2)}) debe ser igual al total en pesos ($${totalParsed.toFixed(2)}).`);
       return;
     }
     if (
@@ -152,11 +212,16 @@ export const AddGroupExpenseScreen: React.FC = () => {
       await apiClient.post(`/groups/${groupId}/expenses`, {
         description: description.trim(),
         amount: totalParsed.toFixed(2),
+        currency: activeRateMeta.currency,
+        originalAmount: rateOption === 'ARS' ? null : convertedForeignAmount.toFixed(2),
+        exchangeRate: rateOption === 'ARS' ? null : parsedExchangeRate.toFixed(2),
+        rateType: rateOption === 'ARS' ? null : rateOption,
         date: selectedDate.toISOString(),
         categoryId: selectedCategoryId || undefined,
         splits,
       });
-      navigation.navigate('GroupDetail', { groupId, refreshTimestamp: Date.now() });
+      await awaitGroupDetailRefresh(groupId);
+      navigation.goBack();
     } catch (e: any) {
       const msg = e.response?.data?.message || 'Error al agregar el gasto al grupo';
       Alert.alert('Error', Array.isArray(msg) ? msg[0] : msg);
@@ -208,22 +273,241 @@ export const AddGroupExpenseScreen: React.FC = () => {
           />
         </View>
 
-        {/* Amount */}
-        <View style={{ ...cardStyle, alignItems: 'center', paddingVertical: 24 }}>
-          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-            Monto Total
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 26, color: colors.textMuted, marginRight: 4 }}>$</Text>
+        {/* Amount + Currency / Exchange Rate Card */}
+        <View style={cardStyle}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 14, color: colors.textPrimary }}>
+              Monto Total
+            </Text>
+            {rateOption !== 'ARS' && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  backgroundColor: colors.bgInput,
+                  borderRadius: 8,
+                  padding: 2,
+                  borderWidth: 1,
+                  borderColor: colors.borderSubtle,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={() => setInputInArs(false)}
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 6,
+                    backgroundColor: !inputInArs ? colors.brand : 'transparent',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: 'Inter_600SemiBold',
+                      fontSize: 11,
+                      color: !inputInArs ? '#fff' : colors.textMuted,
+                    }}
+                  >
+                    En {activeRateMeta.currency}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setInputInArs(true)}
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 6,
+                    backgroundColor: inputInArs ? colors.brand : 'transparent',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: 'Inter_600SemiBold',
+                      fontSize: 11,
+                      color: inputInArs ? '#fff' : colors.textMuted,
+                    }}
+                  >
+                    En ARS
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+
+          {/* Structured Amount Input Box */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: colors.bgInput,
+              borderWidth: 1.5,
+              borderColor: colors.border,
+              borderRadius: 14,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              marginBottom: 14,
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: colors.brandLight,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 8,
+                marginRight: 12,
+                borderWidth: 1,
+                borderColor: `${colors.brand}25`,
+              }}
+            >
+              <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 14, color: colors.brand }}>
+                {rateOption === 'ARS' || inputInArs ? 'ARS $' : activeRateMeta.symbol}
+              </Text>
+            </View>
             <TextInput
               value={amount}
               onChangeText={setAmount}
-              placeholder="0"
+              placeholder="0,00"
               placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
-              style={{ fontFamily: 'Outfit_800ExtraBold', fontSize: 48, color: colors.textPrimary, letterSpacing: -1, minWidth: 80, textAlign: 'center', padding: 0 }}
+              style={{
+                flex: 1,
+                fontFamily: 'Outfit_700Bold',
+                fontSize: 28,
+                color: colors.textPrimary,
+                textAlign: 'right',
+                padding: 0,
+              }}
             />
           </View>
+
+          {/* Currency / Rate Type Tags (wrapped grid matching Categories) */}
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+            Cotización
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {RATE_OPTIONS.map((opt) => {
+              const isSelected = rateOption === opt.code;
+              const liveQuote = opt.code !== 'ARS' ? ratesMap[opt.code]?.sell : null;
+              return (
+                <TouchableOpacity
+                  key={opt.code}
+                  onPress={() => handleSelectRateOption(opt.code)}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 10,
+                    borderWidth: 1.5,
+                    borderColor: isSelected ? colors.brand : colors.border,
+                    backgroundColor: isSelected ? colors.brandLight : colors.bgInput,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: isSelected ? 'Inter_600SemiBold' : 'Inter_400Regular',
+                      fontSize: 12,
+                      color: isSelected ? colors.brand : colors.textSecondary,
+                    }}
+                  >
+                    {opt.shortLabel}
+                  </Text>
+                  {liveQuote ? (
+                    <Text
+                      style={{
+                        fontFamily: 'Inter_500Medium',
+                        fontSize: 11,
+                        color: isSelected ? colors.brand : colors.textMuted,
+                      }}
+                    >
+                      ${Math.round(liveQuote).toLocaleString('es-AR')}
+                    </Text>
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {rateOption !== 'ARS' && (
+            <View
+              style={{
+                marginTop: 14,
+                padding: 12,
+                borderRadius: 12,
+                backgroundColor: colors.bgInput,
+                borderWidth: 1,
+                borderColor: `${colors.brand}30`,
+                gap: 8,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                  <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: colors.textSecondary }}>
+                    TC {activeRateMeta.shortLabel}:
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => loadRates(rateOption)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <RefreshCw size={13} color={colors.brand} />
+                  </TouchableOpacity>
+                </View>
+
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: colors.bgCard,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderRadius: 8,
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                  }}
+                >
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.textMuted, marginRight: 2 }}>
+                    $
+                  </Text>
+                  <TextInput
+                    value={customRate}
+                    onChangeText={setCustomRate}
+                    keyboardType="decimal-pad"
+                    placeholder={loadingRates ? '...' : '0'}
+                    placeholderTextColor={colors.textMuted}
+                    style={{
+                      fontFamily: 'Inter_600SemiBold',
+                      fontSize: 13,
+                      color: colors.textPrimary,
+                      minWidth: 56,
+                      textAlign: 'right',
+                      padding: 0,
+                    }}
+                  />
+                </View>
+              </View>
+
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingTop: 8,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.borderSubtle,
+                }}
+              >
+                <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: colors.textMuted }}>
+                  {inputInArs
+                    ? `Equivalente en ${activeRateMeta.currency}`
+                    : 'Total a dividir en Pesos (ARS)'}
+                </Text>
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: colors.brand }}>
+                  {inputInArs
+                    ? formatForeignAmount(convertedForeignAmount, activeRateMeta.currency)
+                    : formatCurrency(totalParsed)}
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Category selector */}
@@ -233,8 +517,8 @@ export const AddGroupExpenseScreen: React.FC = () => {
               Categoría
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {categories.map((cat, idx) => {
-                const catColor = getCategoryColor(cat.icon, idx);
+              {categories.map((cat) => {
+                const catColor = getCategoryColor(cat.icon, cat.name);
                 const isSelected = selectedCategoryId === cat.id;
                 return (
                   <TouchableOpacity
@@ -318,7 +602,9 @@ export const AddGroupExpenseScreen: React.FC = () => {
           </View>
 
           {loadingMembers ? (
-            <ActivityIndicator color={colors.brand} />
+            <View style={{ alignItems: 'center', paddingVertical: 12 }}>
+              <Spinner size={22} color={colors.brand} />
+            </View>
           ) : (
             <View style={{ gap: 12 }}>
               {participants.map((p, i) => {
@@ -386,12 +672,20 @@ export const AddGroupExpenseScreen: React.FC = () => {
           onPress={handleSubmit}
           disabled={loading}
           activeOpacity={0.8}
-          style={{ backgroundColor: colors.brand, borderRadius: 14, paddingVertical: 17, alignItems: 'center', justifyContent: 'center', shadowColor: colors.brand, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 4 }}
+          style={{ backgroundColor: colors.brand, opacity: loading ? 0.85 : 1, borderRadius: 14, paddingVertical: 17, flexDirection: 'row', gap: 10, alignItems: 'center', justifyContent: 'center', shadowColor: colors.brand, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 4 }}
         >
-          {loading
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>Cargar Gasto</Text>
-          }
+          {loading ? (
+            <>
+              <Spinner size={18} color="#fff" />
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>
+                Guardando gasto...
+              </Text>
+            </>
+          ) : (
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>
+              Cargar Gasto
+            </Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </View>

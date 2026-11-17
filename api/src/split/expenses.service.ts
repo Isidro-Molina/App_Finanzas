@@ -137,6 +137,12 @@ export class ExpensesService {
       categoryId = otrosCategory?.id;
     }
 
+    const isForeignCurrency = Boolean(dto.currency && dto.currency !== 'ARS');
+    const parsedExchangeRate =
+      isForeignCurrency && dto.exchangeRate
+        ? parseFloat(dto.exchangeRate)
+        : null;
+
     // Crear el gasto y todos los splits en una transacción atómica
     return this.prisma.$transaction(async (tx) => {
       const expense = await tx.groupExpense.create({
@@ -145,6 +151,12 @@ export class ExpensesService {
           paidById: userId,
           description: dto.description,
           amount: dto.amount,
+          currency: isForeignCurrency ? dto.currency : 'ARS',
+          originalAmount: isForeignCurrency
+            ? (dto.originalAmount ?? null)
+            : null,
+          exchangeRate: isForeignCurrency ? (dto.exchangeRate ?? null) : null,
+          rateType: isForeignCurrency ? (dto.rateType ?? null) : null,
           date: dto.date ? new Date(dto.date) : new Date(),
           categoryId: categoryId || null,
           // El split del propio pagador (o de monto 0) nace saldado
@@ -152,6 +164,12 @@ export class ExpensesService {
             create: splitsData.map((s) => ({
               ...s,
               isPaid: s.userId === userId || parseFloat(s.amountOwed) <= 0,
+              paidCurrency:
+                s.userId === userId
+                  ? isForeignCurrency
+                    ? (dto.currency ?? 'ARS')
+                    : 'ARS'
+                  : null,
             })),
           },
         },
@@ -163,15 +181,23 @@ export class ExpensesService {
 
       // Crear transacción personal para el pagador por su parte proporcional (si > 0)
       const payerSplit = expense.splits.find((s) => s.userId === userId);
-      if (
-        payerSplit &&
-        categoryId &&
-        parseFloat(String(payerSplit.amountOwed)) > 0
-      ) {
+      const payerAmountOwed = payerSplit
+        ? parseFloat(String(payerSplit.amountOwed))
+        : 0;
+      if (payerSplit && categoryId && payerAmountOwed > 0) {
+        const payerOriginalAmount =
+          isForeignCurrency && parsedExchangeRate && parsedExchangeRate > 0
+            ? (payerAmountOwed / parsedExchangeRate).toFixed(2)
+            : null;
+
         const txPersonal = await tx.transaction.create({
           data: {
             userId,
             amount: payerSplit.amountOwed,
+            currency: isForeignCurrency ? dto.currency : 'ARS',
+            originalAmount: payerOriginalAmount,
+            exchangeRate: isForeignCurrency ? (dto.exchangeRate ?? null) : null,
+            rateType: isForeignCurrency ? (dto.rateType ?? null) : null,
             type: 'EXPENSE',
             categoryId,
             description: `${dto.description} (${group.name})`,
@@ -260,6 +286,7 @@ export class ExpensesService {
     groupId: string,
     expenseId: string,
     splitId: string,
+    paidCurrency?: 'ARS' | 'USD' | 'EUR',
   ) {
     await this.assertMember(userId, groupId);
 
@@ -312,6 +339,12 @@ export class ExpensesService {
     }
 
     const willBePaid = !split.isPaid;
+    const expCurrency = split.groupExpense.currency || 'ARS';
+    const resolvedPaidCurrency = willBePaid
+      ? expCurrency !== 'ARS'
+        ? (paidCurrency ?? expCurrency)
+        : 'ARS'
+      : null;
 
     return this.prisma.$transaction(async (tx) => {
       let transactionId = split.transactionId;
@@ -351,14 +384,30 @@ export class ExpensesService {
           targetCategoryId = otrosCat?.id ?? null;
         }
 
-        if (targetCategoryId && parseFloat(String(split.amountOwed)) > 0) {
+        const debtorAmountOwed = parseFloat(String(split.amountOwed));
+        if (targetCategoryId && debtorAmountOwed > 0) {
+          const expRate = split.groupExpense.exchangeRate
+            ? parseFloat(String(split.groupExpense.exchangeRate))
+            : null;
+          const isForeign = expCurrency !== 'ARS' && expRate && expRate > 0;
+          const paidInForeign =
+            isForeign && resolvedPaidCurrency && resolvedPaidCurrency !== 'ARS';
+
           const personalTx = await tx.transaction.create({
             data: {
               userId: split.userId,
               amount: split.amountOwed,
+              currency: paidInForeign ? expCurrency : 'ARS',
+              originalAmount: isForeign
+                ? (debtorAmountOwed / expRate).toFixed(2)
+                : null,
+              exchangeRate: isForeign ? split.groupExpense.exchangeRate : null,
+              rateType: isForeign ? split.groupExpense.rateType : null,
               type: 'EXPENSE',
               categoryId: targetCategoryId,
-              description: `${split.groupExpense.description} (${split.groupExpense.group.name})`,
+              description: isForeign
+                ? `${split.groupExpense.description} (${split.groupExpense.group.name} · Pagado en ${resolvedPaidCurrency})`
+                : `${split.groupExpense.description} (${split.groupExpense.group.name})`,
               date: new Date(),
             },
           });
@@ -378,6 +427,7 @@ export class ExpensesService {
         where: { id: splitId },
         data: {
           isPaid: willBePaid,
+          paidCurrency: resolvedPaidCurrency,
           transactionId,
         },
         include: { user: { select: { id: true, name: true, email: true } } },

@@ -55,6 +55,7 @@ export class TransactionsService {
 
     let totalIncome = 0;
     let totalExpense = 0;
+    let expenseCount = 0;
     const byCategory: Record<
       string,
       { name: string; icon: string | null; total: number; type: string }
@@ -62,8 +63,12 @@ export class TransactionsService {
 
     for (const tx of transactions) {
       const amount = Number(tx.amount);
-      if (tx.type === 'INCOME') totalIncome += amount;
-      else totalExpense += amount;
+      if (tx.type === 'INCOME') {
+        totalIncome += amount;
+      } else {
+        totalExpense += amount;
+        expenseCount += 1;
+      }
 
       const key = tx.categoryId || 'unknown';
       if (!byCategory[key]) {
@@ -83,6 +88,7 @@ export class TransactionsService {
       totalIncome: +totalIncome.toFixed(2),
       totalExpense: +totalExpense.toFixed(2),
       balance: +(totalIncome - totalExpense).toFixed(2),
+      expenseCount,
       byCategory: Object.values(byCategory).sort((a, b) => b.total - a.total),
     };
   }
@@ -112,6 +118,19 @@ export class TransactionsService {
       data: {
         userId,
         amount: dto.amount,
+        currency: dto.currency || 'ARS',
+        originalAmount:
+          dto.currency && dto.currency !== 'ARS'
+            ? (dto.originalAmount ?? null)
+            : null,
+        exchangeRate:
+          dto.currency && dto.currency !== 'ARS'
+            ? (dto.exchangeRate ?? null)
+            : null,
+        rateType:
+          dto.currency && dto.currency !== 'ARS'
+            ? (dto.rateType ?? null)
+            : null,
         type: dto.type,
         categoryId: dto.categoryId,
         description: dto.description,
@@ -155,6 +174,14 @@ export class TransactionsService {
       where: { id },
       data: {
         ...(dto.amount && { amount: dto.amount }),
+        ...(dto.currency !== undefined && { currency: dto.currency }),
+        ...(dto.originalAmount !== undefined && {
+          originalAmount: dto.originalAmount,
+        }),
+        ...(dto.exchangeRate !== undefined && {
+          exchangeRate: dto.exchangeRate,
+        }),
+        ...(dto.rateType !== undefined && { rateType: dto.rateType }),
         ...(dto.type && { type: dto.type }),
         ...(dto.categoryId && { categoryId: dto.categoryId }),
         ...(dto.description !== undefined && { description: dto.description }),
@@ -185,7 +212,7 @@ export class TransactionsService {
           where: { id: split.id },
           data: {
             transactionId: null,
-            ...(isPayerOwnSplit ? {} : { isPaid: false }),
+            ...(isPayerOwnSplit ? {} : { isPaid: false, paidCurrency: null }),
           },
         });
       }

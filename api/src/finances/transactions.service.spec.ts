@@ -79,6 +79,86 @@ describe('TransactionsService - Operaciones y seguridad financiera', () => {
       expect(res.id).toBe('tx-1');
       expect(mockPrisma.transaction.create).toHaveBeenCalled();
     });
+
+    it('debe guardar metadatos de moneda extranjera y tipo de cotización (Dólar Tarjeta)', async () => {
+      mockPrisma.category.findFirst.mockResolvedValue({
+        id: 'cat-1',
+        name: 'Suscripciones',
+        type: 'EXPENSE',
+        isDeleted: false,
+      });
+      mockPrisma.transaction.create.mockResolvedValue({
+        id: 'tx-usd-1',
+        amount: '29000.00',
+        currency: 'USD',
+        originalAmount: '20.00',
+        exchangeRate: '1450.00',
+        rateType: 'TARJETA',
+        type: 'EXPENSE',
+        categoryId: 'cat-1',
+      });
+
+      const res = await service.create('user-1', {
+        amount: '29000.00',
+        currency: 'USD',
+        originalAmount: '20.00',
+        exchangeRate: '1450.00',
+        rateType: 'TARJETA',
+        type: 'EXPENSE',
+        categoryId: 'cat-1',
+      });
+
+      expect(res.currency).toBe('USD');
+      expect(mockPrisma.transaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            amount: '29000.00',
+            currency: 'USD',
+            originalAmount: '20.00',
+            exchangeRate: '1450.00',
+            rateType: 'TARJETA',
+          }),
+        }),
+      );
+    });
+
+    it('debe permitir limpiar description = null y campos de moneda en update (AUD-11)', async () => {
+      mockPrisma.transaction.findUnique.mockResolvedValue({
+        id: 'tx-1',
+        userId: 'user-1',
+        categoryId: 'cat-1',
+        type: 'EXPENSE',
+      });
+      mockPrisma.transaction.update.mockResolvedValue({
+        id: 'tx-1',
+        description: null,
+        currency: 'ARS',
+        originalAmount: null,
+        exchangeRate: null,
+        rateType: null,
+      });
+
+      await service.update('user-1', 'tx-1', {
+        description: null,
+        currency: 'ARS',
+        originalAmount: null,
+        exchangeRate: null,
+        rateType: null,
+      });
+
+      expect(mockPrisma.transaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'tx-1' },
+          data: expect.objectContaining({
+            description: null,
+            currency: 'ARS',
+            originalAmount: null,
+            exchangeRate: null,
+            rateType: null,
+          }),
+        }),
+      );
+    });
   });
 
   describe('getSummary - Cálculo de balances y categorías', () => {
@@ -164,7 +244,7 @@ describe('TransactionsService - Operaciones y seguridad financiera', () => {
 
       expect(mockPrisma.expenseSplit.update).toHaveBeenCalledWith({
         where: { id: 'split-2' },
-        data: { transactionId: null, isPaid: false },
+        data: { transactionId: null, isPaid: false, paidCurrency: null },
       });
       expect(mockPrisma.transaction.delete).toHaveBeenCalledWith({
         where: { id: 'tx-1' },

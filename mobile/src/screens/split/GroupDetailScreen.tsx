@@ -1,10 +1,9 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   Modal,
   TextInput,
   Alert,
@@ -15,6 +14,8 @@ import {
 import { useFocusEffect, useRoute, useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import apiClient from '../../api/client';
+import { Spinner } from '../../components/Spinner';
+import { registerGroupDetailRefresh, wasGroupJustSynced } from '../../utils/syncEvents';
 import {
   ArrowLeft,
   UserPlus,
@@ -39,6 +40,7 @@ import {
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency } from '../../utils/currency';
+import { getRateMeta, formatForeignAmount } from '../../utils/exchangeRates';
 
 interface Member {
   userId: string;
@@ -62,6 +64,7 @@ interface SplitItem {
   userId: string;
   amountOwed: string;
   isPaid: boolean;
+  paidCurrency?: 'ARS' | 'USD' | 'EUR' | null;
   user: { id: string; name: string; email?: string };
 }
 
@@ -69,6 +72,10 @@ interface Expense {
   id: string;
   description: string;
   amount: string;
+  currency?: string;
+  originalAmount?: string | number | null;
+  exchangeRate?: string | number | null;
+  rateType?: string | null;
   date: string;
   paidById?: string;
   paidBy: { id: string; name: string };
@@ -129,7 +136,7 @@ export const GroupDetailScreen = () => {
   const currentMember = group?.members.find((m) => m.userId === user?.id);
   const isAdmin = currentMember?.role === 'ADMIN';
 
-  const fetchData = async (showLoadingOverlay = false) => {
+  const fetchData = useCallback(async (showLoadingOverlay = false) => {
     if (showLoadingOverlay) setIsUpdating(true);
     try {
       const [groupRes, expRes, balRes] = await Promise.all([
@@ -142,10 +149,11 @@ export const GroupDetailScreen = () => {
       setBalance(balRes.data);
 
       // Si el modal de detalle de gasto está abierto, actualizarlo con la info nueva
-      if (selectedExpense) {
-        const updatedExp = (expRes.data as Expense[]).find((e) => e.id === selectedExpense.id);
-        if (updatedExp) setSelectedExpense(updatedExp);
-      }
+      setSelectedExpense((prev) => {
+        if (!prev) return null;
+        const updatedExp = (expRes.data as Expense[]).find((e) => e.id === prev.id);
+        return updatedExp ?? prev;
+      });
     } catch (e) {
       console.error('Error al cargar grupo:', e);
     } finally {
@@ -153,12 +161,17 @@ export const GroupDetailScreen = () => {
       setRefreshing(false);
       setIsUpdating(false);
     }
-  };
+  }, [groupId]);
+
+  useEffect(() => {
+    return registerGroupDetailRefresh(groupId, () => fetchData(false));
+  }, [groupId, fetchData]);
 
   useFocusEffect(
     useCallback(() => {
+      if (wasGroupJustSynced(groupId)) return;
       fetchData(false);
-    }, [groupId, refreshTimestamp]),
+    }, [groupId, refreshTimestamp, fetchData]),
   );
 
   const handleOpenEdit = () => {
@@ -300,19 +313,24 @@ export const GroupDetailScreen = () => {
     );
   };
 
-  const handleToggleSplit = async (splitId: string) => {
+  const handleToggleSplit = async (splitId: string, paidCurrency?: 'ARS' | 'USD' | 'EUR') => {
     if (!selectedExpense) return;
     setTogglingSplitId(splitId);
     try {
       const res = await apiClient.patch(
         `/groups/${groupId}/expenses/${selectedExpense.id}/splits/${splitId}/toggle-paid`,
+        paidCurrency ? { paidCurrency } : {},
       );
       // Actualizar estado del split en el modal y la lista
       setSelectedExpense((prev) => {
         if (!prev) return null;
         return {
           ...prev,
-          splits: prev.splits?.map((s) => (s.id === splitId ? { ...s, isPaid: res.data.isPaid } : s)),
+          splits: prev.splits?.map((s) =>
+            s.id === splitId
+              ? { ...s, isPaid: res.data.isPaid, paidCurrency: res.data.paidCurrency ?? null }
+              : s,
+          ),
         };
       });
       // Sincronizar balances y gastos en segundo plano
@@ -430,7 +448,7 @@ export const GroupDetailScreen = () => {
   if (loading && !refreshing) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={colors.brand} />
+        <Spinner size="large" color={colors.brand} />
       </View>
     );
   }
@@ -541,7 +559,7 @@ export const GroupDetailScreen = () => {
         {/* Indicador de actualización cuando se sincronizan gastos */}
         {isUpdating && (
           <View style={{ backgroundColor: colors.bgCard, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: `${colors.brand}30`, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <ActivityIndicator size="small" color={colors.brand} />
+            <Spinner size="small" color={colors.brand} />
             <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: colors.textSecondary }}>
               Actualizando gastos del grupo...
             </Text>
@@ -563,6 +581,8 @@ export const GroupDetailScreen = () => {
             ) : (
               expenses.map((exp) => {
                 const isMe = exp.paidBy.id === user?.id;
+                const isForeign = Boolean(exp.currency && exp.currency !== 'ARS' && exp.originalAmount);
+                const rateMeta = isForeign ? getRateMeta(exp.rateType, exp.currency) : null;
                 return (
                   <TouchableOpacity
                     key={exp.id}
@@ -571,12 +591,28 @@ export const GroupDetailScreen = () => {
                     style={{ backgroundColor: colors.bgCard, borderRadius: 14, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: isDark ? 0.2 : 0.05, shadowRadius: 3, elevation: 1 }}
                   >
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.textPrimary, flex: 1, marginRight: 12 }}>
-                        {exp.description}
-                      </Text>
-                      <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: colors.brand }}>
-                        {formatCurrency(exp.amount)}
-                      </Text>
+                      <View style={{ flex: 1, marginRight: 12 }}>
+                        {isForeign && rateMeta && (
+                          <View style={{ alignSelf: 'flex-start', backgroundColor: colors.brandLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginBottom: 4, borderWidth: 1, borderColor: `${colors.brand}25` }}>
+                            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: colors.brand }}>
+                              {rateMeta.badge} · {formatForeignAmount(exp.originalAmount, exp.currency)}
+                            </Text>
+                          </View>
+                        )}
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.textPrimary }}>
+                          {exp.description}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: colors.brand }}>
+                          {formatCurrency(exp.amount)}
+                        </Text>
+                        {isForeign && exp.exchangeRate ? (
+                          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: colors.textMuted, marginTop: 1 }}>
+                            TC ${Math.round(Number(exp.exchangeRate)).toLocaleString('es-AR')}
+                          </Text>
+                        ) : null}
+                      </View>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                       <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>
@@ -693,7 +729,7 @@ export const GroupDetailScreen = () => {
             />
             <TouchableOpacity onPress={handleInviteOrSuggest} disabled={inviting} style={{ width: '100%', paddingVertical: 14, backgroundColor: colors.brand, borderRadius: 14, alignItems: 'center' }}>
               {inviting ? (
-                <ActivityIndicator color="#fff" />
+                <Spinner size={18} color="#fff" />
               ) : (
                 <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#fff', fontSize: 15 }}>
                   {isAdmin ? 'Invitar integrante' : 'Enviar sugerencia'}
@@ -819,7 +855,7 @@ export const GroupDetailScreen = () => {
             </View>
 
             <TouchableOpacity onPress={handleSaveGroup} disabled={savingGroup} style={{ width: '100%', paddingVertical: 14, backgroundColor: colors.brand, borderRadius: 14, alignItems: 'center' }}>
-              {savingGroup ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#fff', fontSize: 15 }}>Guardar cambios</Text>}
+              {savingGroup ? <Spinner size={18} color="#fff" /> : <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#fff', fontSize: 15 }}>Guardar cambios</Text>}
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -853,19 +889,34 @@ export const GroupDetailScreen = () => {
                 </View>
 
                 {/* Tarjeta de resumen de pago */}
-                <View style={{ backgroundColor: colors.bgInput, borderRadius: 16, padding: 14, marginBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View>
-                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>Monto total</Text>
-                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: colors.brand }}>
-                      {formatCurrency(selectedExpense.amount)}
-                    </Text>
+                <View style={{ backgroundColor: colors.bgInput, borderRadius: 16, padding: 14, marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View>
+                      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>Monto total (ARS)</Text>
+                      <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 20, color: colors.brand }}>
+                        {formatCurrency(selectedExpense.amount)}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>Pagado por</Text>
+                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.textPrimary }}>
+                        {selectedExpense.paidBy.id === user?.id ? 'Vos' : selectedExpense.paidBy.name}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>Pagado por</Text>
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.textPrimary }}>
-                      {selectedExpense.paidBy.id === user?.id ? 'Vos' : selectedExpense.paidBy.name}
-                    </Text>
-                  </View>
+
+                  {selectedExpense.currency && selectedExpense.currency !== 'ARS' && selectedExpense.originalAmount ? (
+                    <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.borderSubtle, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.brand }}>
+                        {getRateMeta(selectedExpense.rateType, selectedExpense.currency).badge}: {formatForeignAmount(selectedExpense.originalAmount, selectedExpense.currency)}
+                      </Text>
+                      {selectedExpense.exchangeRate ? (
+                        <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: colors.textMuted }}>
+                          Cotización: ${Number(selectedExpense.exchangeRate).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : null}
                 </View>
 
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.textSecondary, marginBottom: 10 }}>
@@ -873,7 +924,7 @@ export const GroupDetailScreen = () => {
                 </Text>
 
                 {/* Lista de splits con estado y botón de marcar pagado */}
-                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 260, marginBottom: 16 }}>
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 280, marginBottom: 16 }}>
                   {selectedExpense.splits?.map((split) => {
                     const isSplitMe = split.userId === user?.id;
                     // La parte del pagador nace saldada y no se toca.
@@ -883,6 +934,21 @@ export const GroupDetailScreen = () => {
                     const isPayerOfExpense = selectedExpense.paidBy.id === user?.id;
                     const canToggle =
                       !isSplitPayer && (isStrict ? isPayerOfExpense : (isSplitMe || isPayerOfExpense));
+
+                    const expCurrency = (selectedExpense.currency || 'ARS') as 'ARS' | 'USD' | 'EUR';
+                    const expRate = Number(selectedExpense.exchangeRate) || 0;
+                    const isForeignExpense = expCurrency !== 'ARS' && expRate > 0;
+                    const foreignShare = isForeignExpense
+                      ? Number(split.amountOwed) / expRate
+                      : 0;
+
+                    const paidBadgeLabel = split.isPaid
+                      ? isSplitPayer
+                        ? 'Pagó el gasto'
+                        : split.paidCurrency && isForeignExpense
+                          ? `Pagado en ${split.paidCurrency}`
+                          : 'Pagado'
+                      : 'Pendiente';
 
                     return (
                       <View
@@ -894,70 +960,135 @@ export const GroupDetailScreen = () => {
                           borderRadius: 14,
                           padding: 12,
                           marginBottom: 8,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
+                          gap: 8,
                         }}
                       >
-                        <View style={{ flex: 1, marginRight: 8 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.textPrimary }}>
-                              {split.user.name} {isSplitMe && '(Tú)'}
-                            </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <View style={{ flex: 1, marginRight: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.textPrimary }}>
+                                {split.user.name} {isSplitMe && '(Tú)'}
+                              </Text>
+                            </View>
+                            {isForeignExpense ? (
+                              <View style={{ marginTop: 3, gap: 2 }}>
+                                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.textSecondary }}>
+                                  En ARS: {formatCurrency(split.amountOwed)}
+                                </Text>
+                                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.brand }}>
+                                  En {expCurrency}: {formatForeignAmount(foreignShare, expCurrency)}
+                                </Text>
+                              </View>
+                            ) : (
+                              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
+                                Le corresponde: {formatCurrency(split.amountOwed)}
+                              </Text>
+                            )}
                           </View>
-                          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
-                            Le corresponde: {formatCurrency(split.amountOwed)}
-                          </Text>
+
+                          <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                            {/* Badge de estado (aclara en qué moneda pagó cuando es gasto en moneda extranjera) */}
+                            <View
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4,
+                                paddingHorizontal: 8,
+                                paddingVertical: 4,
+                                borderRadius: 8,
+                                backgroundColor: split.isPaid ? '#ECFDF5' : '#FEF3C7',
+                              }}
+                            >
+                              {split.isPaid ? <Check size={12} color="#059669" /> : <Clock size={12} color="#D97706" />}
+                              <Text
+                                style={{
+                                  fontFamily: 'Inter_600SemiBold',
+                                  fontSize: 11,
+                                  color: split.isPaid ? '#059669' : '#D97706',
+                                }}
+                              >
+                                {paidBadgeLabel}
+                              </Text>
+                            </View>
+
+                            {/* Si ya está pagado o es un gasto normal en ARS, botón simple */}
+                            {canToggle && (!isForeignExpense || split.isPaid) ? (
+                              <TouchableOpacity
+                                onPress={() => handleToggleSplit(split.id, 'ARS')}
+                                disabled={togglingSplitId === split.id}
+                                style={{ paddingVertical: 2, paddingHorizontal: 4 }}
+                              >
+                                {togglingSplitId === split.id ? (
+                                  <Spinner size="small" color={colors.brand} />
+                                ) : (
+                                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.brand }}>
+                                    {split.isPaid ? 'Marcar pendiente' : 'Marcar pagado'}
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+                            ) : (
+                              isStrict && !split.isPaid && isSplitMe && (
+                                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 10, color: colors.textMuted }}>
+                                  Confirma {selectedExpense.paidBy.name}
+                                </Text>
+                              )
+                            )}
+                          </View>
                         </View>
 
-                        <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                          {/* Badge de estado */}
+                        {/* Si es gasto en USD/EUR y está pendiente, mostrar las dos opciones de pago */}
+                        {canToggle && isForeignExpense && !split.isPaid && (
                           <View
                             style={{
                               flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: 4,
-                              paddingHorizontal: 8,
-                              paddingVertical: 4,
-                              borderRadius: 8,
-                              backgroundColor: split.isPaid ? '#ECFDF5' : '#FEF3C7',
+                              gap: 8,
+                              paddingTop: 8,
+                              borderTopWidth: 1,
+                              borderTopColor: colors.borderSubtle,
                             }}
                           >
-                            {split.isPaid ? <Check size={12} color="#059669" /> : <Clock size={12} color="#D97706" />}
-                            <Text
-                              style={{
-                                fontFamily: 'Inter_600SemiBold',
-                                fontSize: 11,
-                                color: split.isPaid ? '#059669' : '#D97706',
-                              }}
-                            >
-                              {split.isPaid ? 'Pagado' : 'Pendiente'}
-                            </Text>
+                            {togglingSplitId === split.id ? (
+                              <View style={{ flex: 1, alignItems: 'center', paddingVertical: 4 }}>
+                                <Spinner size="small" color={colors.brand} />
+                              </View>
+                            ) : (
+                              <>
+                                <TouchableOpacity
+                                  onPress={() => handleToggleSplit(split.id, 'ARS')}
+                                  style={{
+                                    flex: 1,
+                                    backgroundColor: colors.bgInput,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    borderRadius: 9,
+                                    paddingVertical: 7,
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.textPrimary }}>
+                                    Pagó en ARS ({formatCurrency(split.amountOwed)})
+                                  </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  onPress={() => handleToggleSplit(split.id, expCurrency)}
+                                  style={{
+                                    flex: 1,
+                                    backgroundColor: colors.brandLight,
+                                    borderWidth: 1,
+                                    borderColor: `${colors.brand}40`,
+                                    borderRadius: 9,
+                                    paddingVertical: 7,
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.brand }}>
+                                    Pagó en {expCurrency} ({formatForeignAmount(foreignShare, expCurrency)})
+                                  </Text>
+                                </TouchableOpacity>
+                              </>
+                            )}
                           </View>
-
-                          {/* Botón para alternar si tiene permisos */}
-                          {canToggle ? (
-                            <TouchableOpacity
-                              onPress={() => handleToggleSplit(split.id)}
-                              disabled={togglingSplitId === split.id}
-                              style={{ paddingVertical: 2, paddingHorizontal: 4 }}
-                            >
-                              {togglingSplitId === split.id ? (
-                                <ActivityIndicator size="small" color={colors.brand} />
-                              ) : (
-                                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.brand }}>
-                                  {split.isPaid ? 'Marcar pendiente' : 'Marcar pagado'}
-                                </Text>
-                              )}
-                            </TouchableOpacity>
-                          ) : (
-                            isStrict && !split.isPaid && isSplitMe && (
-                              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 10, color: colors.textMuted }}>
-                                Confirma {selectedExpense.paidBy.name}
-                              </Text>
-                            )
-                          )}
-                        </View>
+                        )}
                       </View>
                     );
                   })}
@@ -1103,7 +1234,7 @@ export const GroupDetailScreen = () => {
                 style={{ marginTop: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14, borderWidth: 1.5, borderColor: '#EF444430', backgroundColor: isDark ? '#EF444415' : '#FEF2F2' }}
               >
                 {leavingGroup ? (
-                  <ActivityIndicator color="#EF4444" />
+                  <Spinner size={18} color="#EF4444" />
                 ) : (
                   <>
                     <LogOut size={16} color="#EF4444" />

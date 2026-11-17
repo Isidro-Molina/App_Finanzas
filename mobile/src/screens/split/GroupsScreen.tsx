@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   Modal,
   TextInput,
   Alert,
@@ -15,6 +14,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import apiClient from '../../api/client';
 import { useTheme } from '../../context/ThemeContext';
 import { Users, Plus, X } from 'lucide-react-native';
+import { Spinner } from '../../components/Spinner';
 
 interface Group {
   id: string;
@@ -133,7 +133,7 @@ export const GroupsScreen = () => {
   if (loading && !refreshing) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={colors.brand} />
+        <Spinner size="large" color={colors.brand} />
       </View>
     );
   }
@@ -338,7 +338,7 @@ export const GroupsScreen = () => {
                 style={{ flex: 1, paddingVertical: 14, backgroundColor: colors.brand, borderRadius: 12, alignItems: 'center' }}
               >
                 {creating
-                  ? <ActivityIndicator color="#fff" />
+                  ? <Spinner size={18} color="#fff" />
                   : <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#fff' }}>Crear</Text>
                 }
               </TouchableOpacity>

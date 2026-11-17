@@ -1,11 +1,10 @@
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  ActivityIndicator,
   Modal,
   Pressable,
   Platform,
@@ -18,6 +17,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { Info, X, ChevronLeft, ChevronRight, ChevronDown, AlertCircle, RefreshCw } from 'lucide-react-native';
 import { formatCurrency, formatAmount } from '../../utils/currency';
+import { getRateMeta, formatForeignAmount } from '../../utils/exchangeRates';
+import { getCategoryColor } from '../../utils/categoryColors';
+import { registerDashboardRefresh, wasDashboardJustSynced } from '../../utils/syncEvents';
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -41,6 +43,10 @@ interface SummaryData {
 interface Transaction {
   id: string;
   amount: string;
+  currency?: string;
+  originalAmount?: string | null;
+  exchangeRate?: string | null;
+  rateType?: string | null;
   description: string | null;
   type: 'INCOME' | 'EXPENSE';
   date: string;
@@ -56,13 +62,6 @@ interface Budget {
   spent: number;
   remaining: number;
   pctUsed: number;
-}
-
-// Map category icon field (which may hold a color) or use a default palette
-function getCategoryColor(icon: string | null, index: number): string {
-  const palette = ['#2563EB', '#7C3AED', '#DB2777', '#059669', '#D97706', '#0891B2', '#DC2626', '#65A30D'];
-  if (icon && icon.startsWith('#')) return icon;
-  return palette[index % palette.length];
 }
 
 const Skeleton = ({ width, height, borderRadius, marginBottom = 0, style = {} }: any) => {
@@ -115,7 +114,7 @@ export const DashboardScreen = () => {
   };
   const isCurrentMonth = currentMonth === now.getMonth() + 1 && currentYear === now.getFullYear();
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     const fetchId = ++activeFetchIdRef.current;
     setHasError(false);
     try {
@@ -138,12 +137,17 @@ export const DashboardScreen = () => {
         setRefreshing(false);
       }
     }
-  };
+  }, [currentMonth, currentYear]);
+
+  useEffect(() => {
+    return registerDashboardRefresh(fetchData);
+  }, [fetchData]);
 
   useFocusEffect(
     useCallback(() => {
+      if (wasDashboardJustSynced()) return;
       fetchData();
-    }, [currentMonth, currentYear]),
+    }, [fetchData]),
   );
 
   const onRefresh = () => {
@@ -386,7 +390,7 @@ export const DashboardScreen = () => {
           onChanged={fetchData}
         />
 
-        {/* Expenses header — solo label, sin botón de texto */}
+        {/* Expenses header */}
         <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 }}>
           <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: colors.textPrimary }}>
             Últimos Gastos
@@ -402,10 +406,12 @@ export const DashboardScreen = () => {
               </Text>
             </View>
           ) : (
-            transactions.map((tx, index) => {
+            transactions.map((tx) => {
               const isIncome = tx.type === 'INCOME';
-              const catColor = getCategoryColor(tx.category?.icon, index);
+              const catColor = getCategoryColor(tx.category?.icon, tx.category?.name);
               const hasDescription = Boolean(tx.description && tx.description.trim());
+              const isForeign = Boolean(tx.currency && tx.currency !== 'ARS' && tx.originalAmount);
+              const rateMeta = isForeign ? getRateMeta(tx.rateType, tx.currency) : null;
 
               return (
                 <TouchableOpacity
@@ -442,13 +448,20 @@ export const DashboardScreen = () => {
                   </View>
 
                   <View style={{ flex: 1 }}>
-                    {/* Category tag */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                    {/* Category tag + Currency / Rate badge */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 3 }}>
                       <View style={{ backgroundColor: `${catColor}18`, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
                         <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: catColor }}>
                           {tx.category?.name || 'Sin categoría'}
                         </Text>
                       </View>
+                      {isForeign && rateMeta && (
+                        <View style={{ backgroundColor: colors.brandLight, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: `${colors.brand}25` }}>
+                          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: colors.brand }}>
+                            {rateMeta.badge}
+                          </Text>
+                        </View>
+                      )}
                       {hasDescription && (
                         <TouchableOpacity onPress={() => setTooltipTx(tx)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                           <Info size={14} color={colors.textMuted} />
@@ -461,12 +474,20 @@ export const DashboardScreen = () => {
                     </Text>
                     <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>
                       {new Date(tx.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+                      {isForeign && tx.exchangeRate ? ` · TC $${Math.round(Number(tx.exchangeRate)).toLocaleString('es-AR')}` : ''}
                     </Text>
                   </View>
 
-                  <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: isIncome ? colors.income : colors.expense }}>
-                    {isIncome ? '+' : '-'}${formatAmount(Math.abs(Number(tx.amount)))}
-                  </Text>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: isIncome ? colors.income : colors.expense }}>
+                      {isIncome ? '+' : '-'}${formatAmount(Math.abs(Number(tx.amount)))}
+                    </Text>
+                    {isForeign && (
+                      <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: colors.brand, marginTop: 2 }}>
+                        {formatForeignAmount(tx.originalAmount, tx.currency)}
+                      </Text>
+                    )}
+                  </View>
                 </TouchableOpacity>
               );
             })
@@ -476,7 +497,12 @@ export const DashboardScreen = () => {
 
       {/* FAB — único botón de agregar */}
       <TouchableOpacity
-        onPress={() => navigation.navigate('AddTransaction')}
+        onPress={() =>
+          navigation.navigate('AddTransaction', {
+            initialMonth: currentMonth,
+            initialYear: currentYear,
+          })
+        }
         style={{
           position: 'absolute',
           bottom: Platform.OS === 'ios' ? 98 : 90,

@@ -3,6 +3,7 @@ import { View, Text } from 'react-native';
 import Svg, { G, Path, Circle } from 'react-native-svg';
 import { useTheme } from '../context/ThemeContext';
 import { formatCurrency } from '../utils/currency';
+import { getCategoryColor } from '../utils/categoryColors';
 
 interface CategorySummary {
   name: string;
@@ -14,14 +15,6 @@ interface CategorySummary {
 interface SpendingChartProps {
   categories: CategorySummary[];
   totalExpense: number;
-}
-
-const DEFAULT_COLORS = ['#2563EB', '#7C3AED', '#DB2777', '#059669', '#D97706', '#0891B2', '#DC2626', '#65A30D'];
-
-/** Returns the color for a category: prefers the hex stored in `icon`, else palette. */
-function getCategoryColor(cat: CategorySummary, index: number): string {
-  if (cat.icon && cat.icon.startsWith('#')) return cat.icon;
-  return DEFAULT_COLORS[index % DEFAULT_COLORS.length];
 }
 
 export const SpendingChart: React.FC<SpendingChartProps> = ({ categories, totalExpense }) => {
@@ -67,7 +60,7 @@ export const SpendingChart: React.FC<SpendingChartProps> = ({ categories, totalE
   let svgContent: React.ReactNode;
 
   if (isSingleCategory) {
-    const color = getCategoryColor(expensesOnly[0], 0);
+    const color = getCategoryColor(expensesOnly[0].icon, expensesOnly[0].name);
     svgContent = (
       <Circle
         cx={center}
@@ -103,7 +96,7 @@ export const SpendingChart: React.FC<SpendingChartProps> = ({ categories, totalE
         `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
       ].join(' ');
 
-      return { pathData, color: getCategoryColor(cat, i), category: cat };
+      return { pathData, color: getCategoryColor(cat.icon, cat.name), category: cat };
     });
 
     svgContent = arcs.map((arc, idx) => (
@@ -149,8 +142,8 @@ export const SpendingChart: React.FC<SpendingChartProps> = ({ categories, totalE
 
         {/* Legend */}
         <View style={{ flex: 1, gap: 8 }}>
-          {expensesOnly.slice(0, 5).map((cat, i) => {
-            const color = getCategoryColor(cat, i);
+          {expensesOnly.slice(0, 5).map((cat) => {
+            const color = getCategoryColor(cat.icon, cat.name);
             const pct = Math.round((cat.total / totalExpense) * 100);
             return (
               <View key={cat.name} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
