@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Linking } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useDialog } from '../../context/DialogContext';
 import {
   User,
   Lock,
@@ -22,6 +23,9 @@ import { useNavigation } from '@react-navigation/native';
 import apiClient from '../../api/client';
 import { Paths, File } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import * as StoreReview from 'expo-store-review';
+import Constants from 'expo-constants';
+import { HelpCenterModal, TermsPrivacyModal } from '../../components/settings/SupportSheets';
 
 const Toggle = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
   <TouchableOpacity
@@ -56,69 +60,76 @@ const Toggle = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
 export const SettingsScreen = () => {
   const { user, logout, biometricEnabled, enableBiometric, disableBiometric, isBiometricAvailable } = useAuth();
   const { colors, isDark, toggleTheme } = useTheme();
+  const { showAlert, showConfirm } = useDialog();
   const navigation = useNavigation<any>();
   const [notifications, setNotifications] = useState(true);
+  const [helpVisible, setHelpVisible] = useState(false);
+  const [termsVisible, setTermsVisible] = useState(false);
 
   const handleToggleBiometric = async () => {
     if (biometricEnabled) {
       await disableBiometric();
-      Alert.alert('Desactivado', 'El acceso biométrico fue desactivado.');
+      await showAlert({
+        title: 'Biometría desactivada',
+        message: 'El acceso biométrico fue desactivado.',
+        icon: <Fingerprint size={22} color={colors.brand} />,
+      });
     } else {
       const available = await isBiometricAvailable();
       if (!available) {
-        Alert.alert(
-          'No disponible',
-          'Tu dispositivo no soporta o no tiene configurada la autenticación biométrica (Face ID / Huella).',
-        );
+        await showAlert({
+          title: 'No disponible',
+          message: 'Tu dispositivo no soporta o no tiene configurada la autenticación biométrica (Face ID / Huella).',
+          icon: <Fingerprint size={22} color={colors.brand} />,
+        });
         return;
       }
       const success = await enableBiometric();
       if (success) {
-        Alert.alert('¡Listo!', 'El inicio de sesión biométrico fue activado.');
+        await showAlert({
+          title: 'Acceso biométrico activo',
+          message: 'El inicio de sesión biométrico fue activado correctamente.',
+          icon: <Fingerprint size={22} color="#059669" />,
+          iconBgColor: '#ECFDF5',
+        });
       }
     }
   };
 
   const [deletingAccount, setDeletingAccount] = useState(false);
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Eliminar cuenta',
-      '¿Estás seguro de que querés eliminar tu cuenta? Se borrarán todos tus datos y gastos personales (el historial de gastos en grupos compartidos se mantendrá para los demás miembros).',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Continuar',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert(
-              'Confirmación final',
-              'Esta acción NO se puede deshacer. ¿Realmente querés eliminar tu cuenta de forma permanente?',
-              [
-                { text: 'Cancelar', style: 'cancel' },
-                {
-                  text: 'Sí, eliminar mi cuenta',
-                  style: 'destructive',
-                  onPress: async () => {
-                    setDeletingAccount(true);
-                    try {
-                      await apiClient.delete('/users/me');
-                      await disableBiometric();
-                      await logout();
-                    } catch (e: any) {
-                      const msg = e.response?.data?.message || 'Error al eliminar la cuenta';
-                      Alert.alert('Error', Array.isArray(msg) ? msg[0] : msg);
-                    } finally {
-                      setDeletingAccount(false);
-                    }
-                  },
-                },
-              ]
-            );
-          },
-        },
-      ]
-    );
+  const handleDeleteAccount = async () => {
+    const first = await showConfirm({
+      title: 'Eliminar cuenta',
+      message:
+        '¿Estás seguro de que querés eliminar tu cuenta? Se borrarán todos tus datos y gastos personales (el historial de gastos en grupos compartidos se mantendrá para los demás miembros).',
+      confirmText: 'Continuar',
+      destructive: true,
+    });
+    if (!first) return;
+
+    const second = await showConfirm({
+      title: 'Confirmación final',
+      message: 'Esta acción NO se puede deshacer. ¿Realmente querés eliminar tu cuenta de forma permanente?',
+      confirmText: 'Sí, eliminar mi cuenta',
+      destructive: true,
+    });
+    if (!second) return;
+
+    setDeletingAccount(true);
+    try {
+      await apiClient.delete('/users/me');
+      await disableBiometric();
+      await logout();
+    } catch (e: any) {
+      const msg = e.response?.data?.message || 'Error al eliminar la cuenta';
+      await showAlert({
+        title: 'Error',
+        message: Array.isArray(msg) ? msg[0] : msg,
+      });
+    } finally {
+      setDeletingAccount(false);
+    }
   };
 
   const [exportingCsv, setExportingCsv] = useState(false);
@@ -129,7 +140,10 @@ export const SettingsScreen = () => {
       const res = await apiClient.get('/transactions/export-csv');
       const csvData = res.data.csv;
       if (!csvData) {
-        Alert.alert('Sin datos', 'No tenés transacciones registradas para exportar.');
+        await showAlert({
+          title: 'Sin datos',
+          message: 'No tenés transacciones registradas para exportar.',
+        });
         return;
       }
 
@@ -148,36 +162,54 @@ export const SettingsScreen = () => {
           UTI: 'public.comma-separated-values-text',
         });
       } else {
-        Alert.alert('Éxito', `Archivo guardado en: ${file.uri}`);
+        await showAlert({
+          title: 'Exportación lista',
+          message: `Archivo guardado en: ${file.uri}`,
+        });
       }
     } catch (e: any) {
       const msg = e.response?.data?.message || 'Error al exportar los datos';
-      Alert.alert('Error', Array.isArray(msg) ? msg[0] : msg);
+      await showAlert({
+        title: 'Error',
+        message: Array.isArray(msg) ? msg[0] : msg,
+      });
     } finally {
       setExportingCsv(false);
     }
   };
 
   const handleHelpCenter = () => {
-    Alert.alert(
-      'Centro de Ayuda',
-      'Finova te permite gestionar tus finanzas personales y dividir gastos en grupos de forma colaborativa.\n\n• Finanzas: Gestioná tus ingresos, gastos y límites mensuales por categoría.\n• Grupos: Creá grupos, cargá gastos compartidos y liquidá deudas fácilmente.\n\n¿Tenés consultas? Escribinos a soporte@finova.app'
-    );
+    setHelpVisible(true);
   };
 
-  const handleRateApp = () => {
-    Alert.alert(
-      'Calificar Finova',
-      '¡Gracias por usar Finova! Si te gusta la app, dejanos tus 5 estrellas en la tienda.',
-      [{ text: '¡Claro que sí!' }]
-    );
+  const handleRateApp = async () => {
+    try {
+      const canReview = await StoreReview.hasAction();
+      if (canReview) {
+        await StoreReview.requestReview();
+        return;
+      }
+    } catch {
+      // Fallback a link de App Store si esta disponible
+    }
+
+    const appStoreId = Constants.expoConfig?.extra?.appStoreId as string | undefined;
+    if (appStoreId) {
+      const url = `itms-apps://apps.apple.com/app/id${appStoreId}?action=write-review`;
+      await Linking.openURL(url).catch(() => {});
+      return;
+    }
+
+    await showAlert({
+      title: 'Calificar Finova',
+      message: '¡Gracias por usar Finova! La calificación directa en el App Store va a estar disponible después del lanzamiento.',
+      icon: <Star size={22} color="#F59E0B" />,
+      iconBgColor: '#FEF3C7',
+    });
   };
 
   const handleTerms = () => {
-    Alert.alert(
-      'Términos y Privacidad',
-      'Finova protege tu privacidad y tus datos financieros.\n\n• Tus datos son confidenciales y están cifrados.\n• No compartimos información con terceros.\n• Podés eliminar tu cuenta y tus datos en cualquier momento desde esta pantalla.'
-    );
+    setTermsVisible(true);
   };
 
   const SectionTitle = ({ label }: { label: string }) => (
@@ -312,6 +344,9 @@ export const SettingsScreen = () => {
           Finova v1.0.0
         </Text>
       </ScrollView>
+
+      <HelpCenterModal visible={helpVisible} onClose={() => setHelpVisible(false)} />
+      <TermsPrivacyModal visible={termsVisible} onClose={() => setTermsVisible(false)} />
     </View>
   );
 };
