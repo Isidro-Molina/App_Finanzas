@@ -20,12 +20,10 @@ import {
   Trash2,
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
-import apiClient from '../../api/client';
-import { Paths, File } from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import * as StoreReview from 'expo-store-review';
 import Constants from 'expo-constants';
 import { HelpCenterModal, TermsPrivacyModal } from '../../components/settings/SupportSheets';
+import { ExportCsvModal } from '../../components/settings/ExportCsvModal';
 
 const Toggle = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
   <TouchableOpacity
@@ -65,6 +63,7 @@ export const SettingsScreen = () => {
   const [notifications, setNotifications] = useState(true);
   const [helpVisible, setHelpVisible] = useState(false);
   const [termsVisible, setTermsVisible] = useState(false);
+  const [exportVisible, setExportVisible] = useState(false);
 
   const handleToggleBiometric = async () => {
     if (biometricEnabled) {
@@ -100,50 +99,8 @@ export const SettingsScreen = () => {
     navigation.navigate('DeleteAccount');
   };
 
-  const [exportingCsv, setExportingCsv] = useState(false);
-
-  const handleExportCsv = async () => {
-    setExportingCsv(true);
-    try {
-      const res = await apiClient.get('/transactions/export-csv');
-      const csvData = res.data.csv;
-      if (!csvData) {
-        await showAlert({
-          title: 'Sin datos',
-          message: 'No tenés transacciones registradas para exportar.',
-        });
-        return;
-      }
-
-      const file = new File(Paths.document, 'finanzas_transacciones.csv');
-      if (file.exists) {
-        file.delete();
-      }
-      file.create();
-      file.write(csvData);
-
-      const isAvailable = await Sharing.isAvailableAsync();
-      if (isAvailable) {
-        await Sharing.shareAsync(file.uri, {
-          mimeType: 'text/csv',
-          dialogTitle: 'Exportar transacciones',
-          UTI: 'public.comma-separated-values-text',
-        });
-      } else {
-        await showAlert({
-          title: 'Exportación lista',
-          message: `Archivo guardado en: ${file.uri}`,
-        });
-      }
-    } catch (e: any) {
-      const msg = e.response?.data?.message || 'Error al exportar los datos';
-      await showAlert({
-        title: 'Error',
-        message: Array.isArray(msg) ? msg[0] : msg,
-      });
-    } finally {
-      setExportingCsv(false);
-    }
+  const handleExportCsv = () => {
+    setExportVisible(true);
   };
 
   const handleHelpCenter = () => {
@@ -277,9 +234,9 @@ export const SettingsScreen = () => {
             <Row icon={Tag} label="Gestionar categorías" onPress={() => navigation.navigate('ManageCategories')} />
             <Row
               icon={BarChart2}
-              label={exportingCsv ? 'Exportando...' : 'Exportar datos (CSV)'}
+              label="Exportar datos (CSV)"
               border={false}
-              onPress={exportingCsv ? undefined : handleExportCsv}
+              onPress={handleExportCsv}
             />
           </View>
         </View>
@@ -325,6 +282,7 @@ export const SettingsScreen = () => {
 
       <HelpCenterModal visible={helpVisible} onClose={() => setHelpVisible(false)} />
       <TermsPrivacyModal visible={termsVisible} onClose={() => setTermsVisible(false)} />
+      <ExportCsvModal visible={exportVisible} onClose={() => setExportVisible(false)} />
     </View>
   );
 };

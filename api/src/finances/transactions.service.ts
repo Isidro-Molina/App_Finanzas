@@ -9,6 +9,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { TransactionQueryDto } from './dto/transaction-query.dto';
+import { ExportCsvQueryDto } from './dto/export-csv-query.dto';
 
 @Injectable()
 export class TransactionsService {
@@ -225,9 +226,41 @@ export class TransactionsService {
 
   // ─── Exportar CSV ────────────────────────────────────────────────────────
 
-  async exportCsv(userId: string): Promise<string> {
+  async exportCsv(userId: string, query?: ExportCsvQueryDto) {
+    const where: Prisma.TransactionWhereInput = { userId };
+
+    if (query?.type) {
+      where.type = query.type;
+    }
+
+    const fromKey = query?.from ? query.from.slice(0, 10) : undefined;
+    const toKey = query?.to ? query.to.slice(0, 10) : undefined;
+
+    if (fromKey || toKey) {
+      const start = fromKey
+        ? new Date(`${fromKey}T00:00:00.000-03:00`)
+        : undefined;
+      let endExclusive: Date | undefined;
+
+      if (toKey) {
+        const toDate = new Date(`${toKey}T00:00:00.000-03:00`);
+        endExclusive = new Date(toDate.getTime() + 24 * 60 * 60 * 1000);
+      }
+
+      if (start && endExclusive && start >= endExclusive) {
+        throw new BadRequestException(
+          'La fecha "Desde" no puede ser posterior a "Hasta"',
+        );
+      }
+
+      where.date = {
+        ...(start ? { gte: start } : {}),
+        ...(endExclusive ? { lt: endExclusive } : {}),
+      };
+    }
+
     const transactions = await this.prisma.transaction.findMany({
-      where: { userId },
+      where,
       include: { category: true },
       orderBy: { date: 'desc' },
     });
@@ -242,17 +275,50 @@ export class TransactionsService {
       return `"${clean.replace(/"/g, '""')}"`;
     };
 
-    const headers = ['Fecha', 'Tipo', 'Categoría', 'Descripción', 'Monto'];
+    const headers = [
+      'Fecha',
+      'Tipo',
+      'Categoría',
+      'Descripción',
+      'Monto (ARS)',
+      'Moneda',
+      'Monto original',
+      'Cotización',
+      'Tipo de cotización',
+    ];
     const rows = transactions.map((t) => {
       const dateStr = t.date.toISOString().split('T')[0];
       const typeStr = t.type === 'INCOME' ? 'Ingreso' : 'Gasto';
       const catStr = sanitizeField(t.category?.name || 'Sin categoría');
       const descStr = sanitizeField(t.description || '');
       const amountStr = Number(t.amount).toFixed(2);
-      return [dateStr, typeStr, catStr, descStr, amountStr].join(',');
+      const currencyStr = t.currency || 'ARS';
+      const origStr =
+        t.originalAmount != null ? Number(t.originalAmount).toFixed(2) : '';
+      const rateStr =
+        t.exchangeRate != null ? Number(t.exchangeRate).toFixed(2) : '';
+      const rateTypeStr = sanitizeField(t.rateType || '');
+      return [
+        dateStr,
+        typeStr,
+        catStr,
+        descStr,
+        amountStr,
+        currencyStr,
+        origStr,
+        rateStr,
+        rateTypeStr,
+      ].join(',');
     });
 
-    return [headers.join(','), ...rows].join('\n');
+    const csv = `\uFEFF${[headers.join(','), ...rows].join('\n')}`;
+
+    return {
+      csv,
+      count: transactions.length,
+      from: fromKey ?? null,
+      to: toKey ?? null,
+    };
   }
 
   // ─── Helper privado ──────────────────────────────────────────────────────
