@@ -13,6 +13,7 @@ import { Plus, Trash2, X } from 'lucide-react-native';
 import apiClient from '../api/client';
 import { useTheme } from '../context/ThemeContext';
 import { formatCurrency } from '../utils/currency';
+import { formatAmountInput, parseAmountInput } from '../utils/amountInput';
 import { Spinner } from './Spinner';
 
 export interface BudgetItem {
@@ -59,7 +60,7 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
   };
 
   const handleSave = async () => {
-    const value = parseFloat(amount.replace(',', '.'));
+    const value = parseAmountInput(amount);
     if (!categoryId) {
       Alert.alert('Falta la categoría', 'Elegí una categoría para el presupuesto.');
       return;
@@ -187,8 +188,8 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.textSecondary, marginBottom: 6 }}>Tope máximo mensual ($)</Text>
             <TextInput
               value={amount}
-              onChangeText={setAmount}
-              placeholder="Ej: 50000"
+              onChangeText={(text) => setAmount(formatAmountInput(text))}
+              placeholder="Ej: 50.000"
               placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
               style={{ borderWidth: 1.5, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter_400Regular', color: colors.textPrimary, backgroundColor: colors.bgInput, marginBottom: 18 }}

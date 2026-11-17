@@ -18,6 +18,11 @@ import { Spinner } from '../../components/Spinner';
 import { awaitDashboardRefresh } from '../../utils/syncEvents';
 import { getCategoryColor } from '../../utils/categoryColors';
 import {
+  formatAmountInput,
+  parseAmountInput,
+  formatNumberToAmountInput,
+} from '../../utils/amountInput';
+import {
   RATE_OPTIONS,
   RateOptionCode,
   ExchangeRateItem,
@@ -58,13 +63,13 @@ export const AddTransactionScreen: React.FC = () => {
   const [ratesMap, setRatesMap] = useState<Record<string, ExchangeRateItem>>({});
   const [loadingRates, setLoadingRates] = useState(false);
   const [customRate, setCustomRate] = useState(
-    transaction?.exchangeRate ? String(Number(transaction.exchangeRate)) : ''
+    transaction?.exchangeRate ? formatNumberToAmountInput(Number(transaction.exchangeRate)) : ''
   );
   const [amount, setAmount] = useState(
     transaction?.originalAmount && initialRateCode !== 'ARS'
-      ? String(Math.abs(Number(transaction.originalAmount)))
+      ? formatNumberToAmountInput(Math.abs(Number(transaction.originalAmount)))
       : transaction?.amount
-        ? String(Math.abs(Number(transaction.amount)))
+        ? formatNumberToAmountInput(Math.abs(Number(transaction.amount)))
         : ''
   );
   const [description, setDescription] = useState(transaction?.description || '');
@@ -104,7 +109,7 @@ export const AddTransactionScreen: React.FC = () => {
       const map = await fetchExchangeRates();
       setRatesMap(map);
       if (selectedCode !== 'ARS' && map[selectedCode]?.sell && !customRate) {
-        setCustomRate(String(map[selectedCode].sell));
+        setCustomRate(formatNumberToAmountInput(map[selectedCode].sell));
       }
     } finally {
       setLoadingRates(false);
@@ -127,15 +132,15 @@ export const AddTransactionScreen: React.FC = () => {
     }
     const liveRate = ratesMap[code]?.sell;
     if (liveRate) {
-      setCustomRate(String(liveRate));
+      setCustomRate(formatNumberToAmountInput(liveRate));
     } else {
       loadRates(code).then(() => {});
     }
   };
 
   const activeRateMeta = getRateMeta(rateOption);
-  const parsedInputAmount = parseFloat(amount.replace(',', '.')) || 0;
-  const parsedExchangeRate = parseFloat(customRate.replace(',', '.')) || 0;
+  const parsedInputAmount = parseAmountInput(amount);
+  const parsedExchangeRate = parseAmountInput(customRate);
   const convertedArsAmount =
     rateOption === 'ARS'
       ? parsedInputAmount
@@ -198,9 +203,8 @@ export const AddTransactionScreen: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    const cleanAmount = amount.replace(',', '.');
-    const parsedAmount = Number(cleanAmount);
-    if (!cleanAmount || isNaN(parsedAmount) || parsedAmount <= 0) {
+    const parsedAmount = parseAmountInput(amount);
+    if (!amount.trim() || isNaN(parsedAmount) || parsedAmount <= 0) {
       Alert.alert('Monto inválido', 'Por favor ingresá un monto mayor a cero');
       return;
     }
@@ -418,7 +422,7 @@ export const AddTransactionScreen: React.FC = () => {
             </View>
             <TextInput
               value={amount}
-              onChangeText={setAmount}
+              onChangeText={(text) => setAmount(formatAmountInput(text))}
               placeholder="0,00"
               placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
@@ -526,7 +530,7 @@ export const AddTransactionScreen: React.FC = () => {
                   </Text>
                   <TextInput
                     value={customRate}
-                    onChangeText={setCustomRate}
+                    onChangeText={(text) => setCustomRate(formatAmountInput(text))}
                     keyboardType="decimal-pad"
                     placeholder={loadingRates ? '...' : '0'}
                     placeholderTextColor={colors.textMuted}
