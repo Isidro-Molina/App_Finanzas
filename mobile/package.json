@@ -54,7 +54,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "test": "jest"
+    "test": "jest",
+    "postinstall": "node scripts/patch-expo-jsi.js"
   },
   "jest": {
     "preset": "jest-expo",
