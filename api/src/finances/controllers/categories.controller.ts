@@ -13,6 +13,7 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { CategoriesService } from '../categories.service';
 import { CreateCategoryDto } from '../dto/create-category.dto';
 import { UpdateCategoryDto } from '../dto/update-category.dto';
+import { SetCategoryVisibilityDto } from '../dto/set-category-visibility.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('categories')
@@ -32,6 +33,20 @@ export class CategoriesController {
     @Body() dto: CreateCategoryDto,
   ) {
     return this.categoriesService.create(req.user.userId, dto);
+  }
+
+  /** PATCH /api/v1/categories/:id/visibility — Ocultar/mostrar categoría base */
+  @Patch(':id/visibility')
+  setVisibility(
+    @Request() req: { user: { userId: string } },
+    @Param('id') id: string,
+    @Body() dto: SetCategoryVisibilityDto,
+  ) {
+    return this.categoriesService.setVisibility(
+      req.user.userId,
+      id,
+      dto.hidden,
+    );
   }
 
   /** PATCH /api/v1/categories/:id — Modificar categoría personal */

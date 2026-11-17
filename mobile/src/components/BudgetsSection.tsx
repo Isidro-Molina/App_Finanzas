@@ -7,12 +7,14 @@ import {
   Pressable,
   TextInput,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { Plus, Trash2, X } from 'lucide-react-native';
 import apiClient from '../api/client';
 import { useTheme } from '../context/ThemeContext';
+import { useDialog } from '../context/DialogContext';
+import { useCategories } from '../context/CategoriesContext';
 import { formatCurrency } from '../utils/currency';
+import { formatAmountInput, parseAmountInput } from '../utils/amountInput';
 import { Spinner } from './Spinner';
 
 export interface BudgetItem {
@@ -28,76 +30,80 @@ interface CategoryOption {
   id: string;
   name: string;
   type: 'EXPENSE' | 'INCOME';
+  isHidden?: boolean;
 }
 
 interface Props {
   budgets: BudgetItem[];
   month: number;
   year: number;
-  onChanged: () => void;
+  onChanged: () => Promise<void> | void;
 }
 
 export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChanged }) => {
   const { colors, isDark } = useTheme();
+  const { showAlert, showConfirm } = useDialog();
+  const { categories: allCategories, refreshCategories } = useCategories();
 
   const [isOpen, setIsOpen] = useState(false);
-  const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const openModal = async () => {
+  const categories = allCategories.filter((c) => c.type === 'EXPENSE' && !c.isHidden);
+
+  const openModal = () => {
     setCategoryId(null);
     setAmount('');
     setIsOpen(true);
-    try {
-      const res = await apiClient.get('/categories');
-      setCategories((res.data as CategoryOption[]).filter((c) => c.type === 'EXPENSE'));
-    } catch (e) {
-      console.error('Error cargando categorías:', e);
+    if (allCategories.length === 0) {
+      void refreshCategories();
     }
   };
 
   const handleSave = async () => {
-    const value = parseFloat(amount.replace(',', '.'));
+    const value = parseAmountInput(amount);
     if (!categoryId) {
-      Alert.alert('Falta la categoría', 'Elegí una categoría para el presupuesto.');
+      await showAlert({ title: 'Falta la categoría', message: 'Elegí una categoría para el presupuesto.' });
       return;
     }
     if (isNaN(value) || value <= 0) {
-      Alert.alert('Monto inválido', 'Ingresá un monto mayor a cero.');
+      await showAlert({ title: 'Monto inválido', message: 'Ingresá un monto mayor a cero.' });
       return;
     }
     setSaving(true);
     try {
       await apiClient.post('/budgets', { categoryId, amount: value.toFixed(2), month, year });
+      await Promise.resolve(onChanged());
       setIsOpen(false);
-      onChanged();
     } catch (e: any) {
       const msg = e.response?.data?.message || 'No se pudo guardar el presupuesto';
-      Alert.alert('Error', Array.isArray(msg) ? msg[0] : msg);
+      await showAlert({ title: 'Error', message: Array.isArray(msg) ? msg[0] : msg });
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = (b: BudgetItem) => {
-    Alert.alert('Eliminar presupuesto', `¿Eliminar el presupuesto de ${b.category.name}?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await apiClient.delete(`/budgets/${b.id}`);
-            onChanged();
-          } catch (e: any) {
-            const msg = e.response?.data?.message || 'No se pudo eliminar el presupuesto';
-            Alert.alert('Error', Array.isArray(msg) ? msg[0] : msg);
-          }
-        },
-      },
-    ]);
+  const handleDelete = async (b: BudgetItem) => {
+    const confirmed = await showConfirm({
+      title: 'Eliminar límite',
+      message: `¿Querés eliminar el límite de gasto de "${b.category.name}"?`,
+      confirmText: 'Eliminar',
+      destructive: true,
+    });
+    if (!confirmed) return;
+
+    setDeletingId(b.id);
+    try {
+      await apiClient.delete(`/budgets/${b.id}`);
+      await Promise.resolve(onChanged());
+    } catch (e: any) {
+      const msg = e.response?.data?.message || 'No se pudo eliminar el presupuesto';
+      await showAlert({ title: 'Error', message: Array.isArray(msg) ? msg[0] : msg });
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -124,14 +130,28 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
       ) : (
         budgets.map((b) => {
           const over = b.pctUsed >= 100;
-          const warn = b.pctUsed >= 80;
-          const barColor = over ? '#EF4444' : warn ? '#F59E0B' : colors.brand;
+          const barColor =
+            b.pctUsed <= 25
+              ? '#10B981'
+              : b.pctUsed <= 55
+                ? '#EAB308'
+                : b.pctUsed <= 80
+                  ? '#F97316'
+                  : '#EF4444';
           return (
             <View key={b.id} style={{ backgroundColor: colors.bgCard, borderRadius: 14, padding: 14, marginBottom: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: isDark ? 0.2 : 0.05, shadowRadius: 3, elevation: 1 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.textPrimary }}>{b.category.name}</Text>
-                <TouchableOpacity onPress={() => handleDelete(b)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Trash2 size={15} color={colors.textMuted} />
+                <TouchableOpacity
+                  onPress={() => handleDelete(b)}
+                  disabled={deletingId === b.id}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  {deletingId === b.id ? (
+                    <Spinner size={15} color={colors.textMuted} />
+                  ) : (
+                    <Trash2 size={15} color={colors.textMuted} />
+                  )}
                 </TouchableOpacity>
               </View>
               <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.bgSubtle, overflow: 'hidden' }}>
@@ -150,14 +170,27 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
         })
       )}
 
-      <Modal visible={isOpen} transparent animationType="fade" onRequestClose={() => setIsOpen(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 24 }} onPress={() => setIsOpen(false)}>
+      <Modal
+        visible={isOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { if (!saving) setIsOpen(false); }}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 24 }}
+          onPress={() => { if (!saving) setIsOpen(false); }}
+        >
           <Pressable style={{ backgroundColor: colors.bgCard, borderRadius: 24, padding: 24 }} onPress={() => {}}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: colors.textPrimary }}>
                 Límite de gasto por categoría
               </Text>
-              <TouchableOpacity onPress={() => setIsOpen(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <TouchableOpacity
+                onPress={() => setIsOpen(false)}
+                disabled={saving}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={{ opacity: saving ? 0.4 : 1 }}
+              >
                 <X size={20} color="#EF4444" />
               </TouchableOpacity>
             </View>
@@ -174,8 +207,9 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
                   return (
                     <TouchableOpacity
                       key={c.id}
+                      disabled={saving}
                       onPress={() => setCategoryId(c.id)}
-                      style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: selected ? colors.brand : colors.bgInput, borderWidth: 1, borderColor: selected ? colors.brand : colors.border }}
+                      style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: selected ? colors.brand : colors.bgInput, borderWidth: 1, borderColor: selected ? colors.brand : colors.border, opacity: saving ? 0.6 : 1 }}
                     >
                       <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: selected ? '#fff' : colors.textPrimary }}>{c.name}</Text>
                     </TouchableOpacity>
@@ -187,15 +221,38 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.textSecondary, marginBottom: 6 }}>Tope máximo mensual ($)</Text>
             <TextInput
               value={amount}
-              onChangeText={setAmount}
-              placeholder="Ej: 50000"
+              onChangeText={(text) => setAmount(formatAmountInput(text))}
+              editable={!saving}
+              placeholder="Ej: 50.000"
               placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
-              style={{ borderWidth: 1.5, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter_400Regular', color: colors.textPrimary, backgroundColor: colors.bgInput, marginBottom: 18 }}
+              style={{ borderWidth: 1.5, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter_400Regular', fontVariant: ['tabular-nums'], color: colors.textPrimary, backgroundColor: colors.bgInput, marginBottom: 18, opacity: saving ? 0.6 : 1 }}
             />
 
-            <TouchableOpacity onPress={handleSave} disabled={saving} style={{ width: '100%', paddingVertical: 14, backgroundColor: colors.brand, borderRadius: 14, alignItems: 'center' }}>
-              {saving ? <Spinner size={18} color="#fff" /> : <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' }}>Guardar límite</Text>}
+            <TouchableOpacity
+              onPress={handleSave}
+              disabled={saving}
+              accessibilityState={{ disabled: saving }}
+              style={{
+                width: '100%',
+                paddingVertical: 14,
+                backgroundColor: colors.brand,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 8,
+                opacity: saving ? 0.7 : 1,
+              }}
+            >
+              {saving ? (
+                <>
+                  <Spinner size={18} color="#fff" />
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' }}>Guardando límite...</Text>
+                </>
+              ) : (
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' }}>Guardar límite</Text>
+              )}
             </TouchableOpacity>
           </Pressable>
         </Pressable>

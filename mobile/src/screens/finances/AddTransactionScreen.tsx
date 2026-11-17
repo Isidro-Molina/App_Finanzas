@@ -12,11 +12,17 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import apiClient from '../../api/client';
 import { ArrowLeft, Calendar, Clock, Trash2, RefreshCw } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { useCategories } from '../../context/CategoriesContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { formatCurrency } from '../../utils/currency';
 import { Spinner } from '../../components/Spinner';
 import { awaitDashboardRefresh } from '../../utils/syncEvents';
 import { getCategoryColor } from '../../utils/categoryColors';
+import {
+  formatAmountInput,
+  parseAmountInput,
+  formatNumberToAmountInput,
+} from '../../utils/amountInput';
 import {
   RATE_OPTIONS,
   RateOptionCode,
@@ -31,6 +37,7 @@ interface Category {
   name: string;
   icon: string | null; // stores color hex
   type: 'INCOME' | 'EXPENSE';
+  isHidden?: boolean;
 }
 
 export const AddTransactionScreen: React.FC = () => {
@@ -58,13 +65,13 @@ export const AddTransactionScreen: React.FC = () => {
   const [ratesMap, setRatesMap] = useState<Record<string, ExchangeRateItem>>({});
   const [loadingRates, setLoadingRates] = useState(false);
   const [customRate, setCustomRate] = useState(
-    transaction?.exchangeRate ? String(Number(transaction.exchangeRate)) : ''
+    transaction?.exchangeRate ? formatNumberToAmountInput(Number(transaction.exchangeRate)) : ''
   );
   const [amount, setAmount] = useState(
     transaction?.originalAmount && initialRateCode !== 'ARS'
-      ? String(Math.abs(Number(transaction.originalAmount)))
+      ? formatNumberToAmountInput(Math.abs(Number(transaction.originalAmount)))
       : transaction?.amount
-        ? String(Math.abs(Number(transaction.amount)))
+        ? formatNumberToAmountInput(Math.abs(Number(transaction.amount)))
         : ''
   );
   const [description, setDescription] = useState(transaction?.description || '');
@@ -87,13 +94,12 @@ export const AddTransactionScreen: React.FC = () => {
   const [maxPickerDate] = useState(() => new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const { categories, loading: fetchingCategories } = useCategories();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     transaction?.categoryId || transaction?.category?.id || null
   );
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [fetchingCategories, setFetchingCategories] = useState(true);
 
   const formattedDate = selectedDate.toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
   const formattedTime = selectedDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -104,7 +110,7 @@ export const AddTransactionScreen: React.FC = () => {
       const map = await fetchExchangeRates();
       setRatesMap(map);
       if (selectedCode !== 'ARS' && map[selectedCode]?.sell && !customRate) {
-        setCustomRate(String(map[selectedCode].sell));
+        setCustomRate(formatNumberToAmountInput(map[selectedCode].sell));
       }
     } finally {
       setLoadingRates(false);
@@ -113,10 +119,18 @@ export const AddTransactionScreen: React.FC = () => {
 
   useFocusEffect(
     React.useCallback(() => {
-      fetchCategories();
       loadRates(rateOption);
     }, [])
   );
+
+  React.useEffect(() => {
+    if (!selectedCategoryId && categories.length > 0) {
+      const firstMatching = categories.find((c) => c.type === type && !c.isHidden);
+      if (firstMatching) {
+        setSelectedCategoryId(firstMatching.id);
+      }
+    }
+  }, [categories, selectedCategoryId, type]);
 
   const handleSelectRateOption = (code: RateOptionCode) => {
     setRateOption(code);
@@ -127,15 +141,15 @@ export const AddTransactionScreen: React.FC = () => {
     }
     const liveRate = ratesMap[code]?.sell;
     if (liveRate) {
-      setCustomRate(String(liveRate));
+      setCustomRate(formatNumberToAmountInput(liveRate));
     } else {
       loadRates(code).then(() => {});
     }
   };
 
   const activeRateMeta = getRateMeta(rateOption);
-  const parsedInputAmount = parseFloat(amount.replace(',', '.')) || 0;
-  const parsedExchangeRate = parseFloat(customRate.replace(',', '.')) || 0;
+  const parsedInputAmount = parseAmountInput(amount);
+  const parsedExchangeRate = parseAmountInput(customRate);
   const convertedArsAmount =
     rateOption === 'ARS'
       ? parsedInputAmount
@@ -151,24 +165,9 @@ export const AddTransactionScreen: React.FC = () => {
           : 0
         : parsedInputAmount;
 
-  const fetchCategories = async () => {
-    try {
-      const res = await apiClient.get('/categories');
-      setCategories(res.data);
-      if (!selectedCategoryId) {
-        const firstMatching = res.data.find((c: Category) => c.type === type);
-        if (firstMatching) {
-          setSelectedCategoryId(firstMatching.id);
-        }
-      }
-    } catch (e) {
-      console.error('Error fetching categories:', e);
-    } finally {
-      setFetchingCategories(false);
-    }
-  };
-
-  const filteredCategories = categories.filter((c) => c.type === type);
+  const filteredCategories = categories.filter(
+    (c) => c.type === type && (!c.isHidden || (isEditing && c.id === selectedCategoryId)),
+  );
 
   const handleDelete = () => {
     Alert.alert(
@@ -198,9 +197,8 @@ export const AddTransactionScreen: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    const cleanAmount = amount.replace(',', '.');
-    const parsedAmount = Number(cleanAmount);
-    if (!cleanAmount || isNaN(parsedAmount) || parsedAmount <= 0) {
+    const parsedAmount = parseAmountInput(amount);
+    if (!amount.trim() || isNaN(parsedAmount) || parsedAmount <= 0) {
       Alert.alert('Monto inválido', 'Por favor ingresá un monto mayor a cero');
       return;
     }
@@ -418,7 +416,7 @@ export const AddTransactionScreen: React.FC = () => {
             </View>
             <TextInput
               value={amount}
-              onChangeText={setAmount}
+              onChangeText={(text) => setAmount(formatAmountInput(text))}
               placeholder="0,00"
               placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
@@ -426,6 +424,7 @@ export const AddTransactionScreen: React.FC = () => {
               style={{
                 flex: 1,
                 fontFamily: 'Outfit_700Bold',
+                fontVariant: ['tabular-nums'],
                 fontSize: 28,
                 color: colors.textPrimary,
                 textAlign: 'right',
@@ -526,12 +525,13 @@ export const AddTransactionScreen: React.FC = () => {
                   </Text>
                   <TextInput
                     value={customRate}
-                    onChangeText={setCustomRate}
+                    onChangeText={(text) => setCustomRate(formatAmountInput(text))}
                     keyboardType="decimal-pad"
                     placeholder={loadingRates ? '...' : '0'}
                     placeholderTextColor={colors.textMuted}
                     style={{
                       fontFamily: 'Inter_600SemiBold',
+                      fontVariant: ['tabular-nums'],
                       fontSize: 13,
                       color: colors.textPrimary,
                       minWidth: 56,

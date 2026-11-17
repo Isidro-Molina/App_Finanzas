@@ -193,13 +193,17 @@ describe('TransactionsService - Operaciones y seguridad financiera', () => {
     });
   });
 
-  describe('exportCsv - Mitigación contra Formula Injection (CWE-1236)', () => {
-    it('debe anteponer apóstrofe a campos maliciosos con =, +, -, @, tabs', async () => {
+  describe('exportCsv - Mitigación contra Formula Injection (CWE-1236) y filtros', () => {
+    it('debe anteponer apóstrofe a campos maliciosos, incluir BOM UTF-8 y columnas de moneda', async () => {
       mockPrisma.transaction.findMany.mockResolvedValue([
         {
           date: new Date('2026-07-15T12:00:00Z'),
           type: 'EXPENSE',
           amount: '50.00',
+          currency: 'USD',
+          originalAmount: '10.00',
+          exchangeRate: '1450.00',
+          rateType: 'TARJETA',
           description: '=cmd|/c calc.exe!A1', // Inyección maliciosa
           category: { name: '+FormulaTest' }, // Inyección maliciosa
         },
@@ -207,21 +211,66 @@ describe('TransactionsService - Operaciones y seguridad financiera', () => {
           date: new Date('2026-07-16T12:00:00Z'),
           type: 'INCOME',
           amount: '100.00',
+          currency: 'ARS',
+          originalAmount: null,
+          exchangeRate: null,
+          rateType: null,
           description: '@SUM(1,2)', // Inyección con @
           category: { name: 'Normal Category' },
         },
       ]);
 
-      const csv = await service.exportCsv('user-1');
-      const lines = csv.split('\n');
+      const result = await service.exportCsv('user-1');
+      expect(result.count).toBe(2);
+      expect(result.csv.startsWith('\uFEFF')).toBe(true);
 
-      expect(lines[0]).toBe('Fecha,Tipo,Categoría,Descripción,Monto');
-      // Línea 1 debe tener apóstrofe en categoría y descripción
+      const lines = result.csv.slice(1).split('\n');
+      expect(lines[0]).toBe(
+        'Fecha,Tipo,Categoría,Descripción,Monto (ARS),Moneda,Monto original,Cotización,Tipo de cotización',
+      );
       expect(lines[1]).toContain('"\'+FormulaTest"');
       expect(lines[1]).toContain('"\'=cmd|/c calc.exe!A1"');
-      // Línea 2 debe tener apóstrofe en @SUM
+      expect(lines[1]).toContain(',USD,10.00,1450.00,"TARJETA"');
       expect(lines[2]).toContain('"\'@SUM(1,2)"');
       expect(lines[2]).toContain('"Normal Category"');
+    });
+
+    it('debe filtrar por rango de fechas (incluyendo último día completo) y tipo', async () => {
+      mockPrisma.transaction.findMany.mockResolvedValue([]);
+
+      const result = await service.exportCsv('user-1', {
+        from: '2026-10-01',
+        to: '2026-10-31',
+        type: 'EXPENSE',
+      });
+
+      expect(result.count).toBe(0);
+      expect(result.from).toBe('2026-10-01');
+      expect(result.to).toBe('2026-10-31');
+
+      const expectedStart = new Date('2026-10-01T00:00:00.000-03:00');
+      const expectedEnd = new Date(
+        new Date('2026-10-31T00:00:00.000-03:00').getTime() + 86400000,
+      );
+
+      expect(mockPrisma.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            userId: 'user-1',
+            type: 'EXPENSE',
+            date: { gte: expectedStart, lt: expectedEnd },
+          },
+        }),
+      );
+    });
+
+    it('debe rechazar con BadRequestException si from es posterior a to', async () => {
+      await expect(
+        service.exportCsv('user-1', {
+          from: '2026-10-31',
+          to: '2026-10-01',
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

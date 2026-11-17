@@ -12,11 +12,17 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import apiClient from '../../api/client';
 import { ArrowLeft, Calendar, Clock, Users, Check, RefreshCw } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { useCategories } from '../../context/CategoriesContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { formatCurrency } from '../../utils/currency';
 import { Spinner } from '../../components/Spinner';
 import { awaitGroupDetailRefresh } from '../../utils/syncEvents';
 import { getCategoryColor } from '../../utils/categoryColors';
+import {
+  formatAmountInput,
+  parseAmountInput,
+  formatNumberToAmountInput,
+} from '../../utils/amountInput';
 import {
   RATE_OPTIONS,
   RateOptionCode,
@@ -36,6 +42,7 @@ interface Category {
   name: string;
   icon: string | null;
   type: 'INCOME' | 'EXPENSE';
+  isHidden?: boolean;
 }
 
 interface ParticipantSplit {
@@ -61,7 +68,8 @@ export const AddGroupExpenseScreen: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const { categories: allCategories } = useCategories();
+  const categories = allCategories.filter((c) => c.type === 'EXPENSE' && !c.isHidden);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMembers, setLoadingMembers] = useState(true);
@@ -78,7 +86,7 @@ export const AddGroupExpenseScreen: React.FC = () => {
       const map = await fetchExchangeRates();
       setRatesMap(map);
       if (selectedCode !== 'ARS' && map[selectedCode]?.sell) {
-        setCustomRate(String(map[selectedCode].sell));
+        setCustomRate(formatNumberToAmountInput(map[selectedCode].sell));
       }
     } finally {
       setLoadingRates(false);
@@ -88,9 +96,8 @@ export const AddGroupExpenseScreen: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [membersRes, catsRes, fetchedRates] = await Promise.all([
+        const [membersRes, fetchedRates] = await Promise.all([
           apiClient.get(`/groups/${groupId}`),
-          apiClient.get('/categories'),
           fetchExchangeRates(),
         ]);
         setRatesMap(fetchedRates);
@@ -102,23 +109,21 @@ export const AddGroupExpenseScreen: React.FC = () => {
           included: true,
           amount: '',
         })));
-
-        const expenseCats = (catsRes.data as Category[]).filter((c) => c.type === 'EXPENSE');
-        setCategories(expenseCats);
-        const otros = expenseCats.find((c) => c.name === 'Otros');
-        if (otros) {
-          setSelectedCategoryId(otros.id);
-        } else if (expenseCats.length > 0) {
-          setSelectedCategoryId(expenseCats[0].id);
-        }
       } catch (e) {
-        console.error('Error loading members or categories:', e);
+        console.error('Error loading members:', e);
       } finally {
         setLoadingMembers(false);
       }
     };
     fetchData();
   }, [groupId]);
+
+  useEffect(() => {
+    if (!selectedCategoryId && categories.length > 0) {
+      const otros = categories.find((c) => c.name === 'Otros');
+      setSelectedCategoryId(otros ? otros.id : categories[0].id);
+    }
+  }, [categories, selectedCategoryId]);
 
   const handleSelectRateOption = (code: RateOptionCode) => {
     setRateOption(code);
@@ -129,7 +134,7 @@ export const AddGroupExpenseScreen: React.FC = () => {
     }
     const liveRate = ratesMap[code]?.sell;
     if (liveRate) {
-      setCustomRate(String(liveRate));
+      setCustomRate(formatNumberToAmountInput(liveRate));
     } else {
       loadRates(code).then(() => {});
     }
@@ -138,8 +143,8 @@ export const AddGroupExpenseScreen: React.FC = () => {
   const activeRateMeta = getRateMeta(rateOption);
   const includedParticipants = participants.filter((p) => p.included);
   const includedCount = includedParticipants.length;
-  const parsedInputAmount = parseFloat(amount.replace(',', '.')) || 0;
-  const parsedExchangeRate = parseFloat(customRate.replace(',', '.')) || 0;
+  const parsedInputAmount = parseAmountInput(amount);
+  const parsedExchangeRate = parseAmountInput(customRate);
   const totalParsed =
     rateOption === 'ARS'
       ? parsedInputAmount
@@ -169,12 +174,13 @@ export const AddGroupExpenseScreen: React.FC = () => {
   };
 
   const updateCustomAmount = (userId: string, val: string) => {
+    const formatted = formatAmountInput(val);
     setParticipants((prev) =>
-      prev.map((p) => p.userId === userId ? { ...p, amount: val } : p)
+      prev.map((p) => p.userId === userId ? { ...p, amount: formatted } : p)
     );
   };
 
-  const customSum = includedParticipants.reduce((acc, p) => acc + (parseFloat(p.amount.replace(',', '.')) || 0), 0);
+  const customSum = includedParticipants.reduce((acc, p) => acc + parseAmountInput(p.amount), 0);
   const customSumOk = !splitEqual ? Math.abs(customSum - totalParsed) <= 0.02 : true;
 
   const handleSubmit = async () => {
@@ -186,13 +192,13 @@ export const AddGroupExpenseScreen: React.FC = () => {
     }
     if (includedCount === 0) { Alert.alert('Sin participantes', 'Seleccioná al menos un participante.'); return; }
     if (!splitEqual && !customSumOk) {
-      Alert.alert('Montos incorrectos', `La suma ($${customSum.toFixed(2)}) debe ser igual al total en pesos ($${totalParsed.toFixed(2)}).`);
+      Alert.alert('Montos incorrectos', `La suma (${formatCurrency(customSum)}) debe ser igual al total en pesos (${formatCurrency(totalParsed)}).`);
       return;
     }
     if (
       !splitEqual &&
       includedParticipants.some(
-        (p) => (parseFloat(p.amount.replace(',', '.')) || 0) <= 0,
+        (p) => parseAmountInput(p.amount) <= 0,
       )
     ) {
       Alert.alert(
@@ -207,7 +213,7 @@ export const AddGroupExpenseScreen: React.FC = () => {
       const includedList = participants.filter((p) => p.included);
       const splits = splitEqual
         ? includedList.map((p, i) => ({ userId: p.userId, amount: getEqualShare(i) }))
-        : includedList.map((p) => ({ userId: p.userId, amount: (parseFloat(p.amount.replace(',', '.')) || 0).toFixed(2) }));
+        : includedList.map((p) => ({ userId: p.userId, amount: parseAmountInput(p.amount).toFixed(2) }));
 
       await apiClient.post(`/groups/${groupId}/expenses`, {
         description: description.trim(),
@@ -363,13 +369,14 @@ export const AddGroupExpenseScreen: React.FC = () => {
             </View>
             <TextInput
               value={amount}
-              onChangeText={setAmount}
+              onChangeText={(text) => setAmount(formatAmountInput(text))}
               placeholder="0,00"
               placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
               style={{
                 flex: 1,
                 fontFamily: 'Outfit_700Bold',
+                fontVariant: ['tabular-nums'],
                 fontSize: 28,
                 color: colors.textPrimary,
                 textAlign: 'right',
@@ -469,12 +476,13 @@ export const AddGroupExpenseScreen: React.FC = () => {
                   </Text>
                   <TextInput
                     value={customRate}
-                    onChangeText={setCustomRate}
+                    onChangeText={(text) => setCustomRate(formatAmountInput(text))}
                     keyboardType="decimal-pad"
                     placeholder={loadingRates ? '...' : '0'}
                     placeholderTextColor={colors.textMuted}
                     style={{
                       fontFamily: 'Inter_600SemiBold',
+                      fontVariant: ['tabular-nums'],
                       fontSize: 13,
                       color: colors.textPrimary,
                       minWidth: 56,
@@ -646,7 +654,7 @@ export const AddGroupExpenseScreen: React.FC = () => {
                             keyboardType="decimal-pad"
                             placeholder="0"
                             placeholderTextColor={colors.textMuted}
-                            style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.textPrimary, minWidth: 52, padding: 0 }}
+                            style={{ fontFamily: 'Inter_600SemiBold', fontVariant: ['tabular-nums'], fontSize: 13, color: colors.textPrimary, minWidth: 52, padding: 0 }}
                           />
                         </View>
                       )
@@ -661,7 +669,7 @@ export const AddGroupExpenseScreen: React.FC = () => {
             <View style={{ marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.borderSubtle, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>Suma distribuida</Text>
               <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 14, color: customSumOk ? colors.income : colors.expense }}>
-                ${customSum.toFixed(2)} / ${totalParsed.toFixed(2)}
+                {formatCurrency(customSum)} / {formatCurrency(totalParsed)}
               </Text>
             </View>
           )}

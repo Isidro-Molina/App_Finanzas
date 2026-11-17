@@ -15,6 +15,7 @@ import { TransactionsService } from '../transactions.service';
 import { CreateTransactionDto } from '../dto/create-transaction.dto';
 import { UpdateTransactionDto } from '../dto/update-transaction.dto';
 import { TransactionQueryDto } from '../dto/transaction-query.dto';
+import { ExportCsvQueryDto } from '../dto/export-csv-query.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('transactions')
@@ -55,12 +56,14 @@ export class TransactionsController {
 
   /**
    * GET /api/v1/transactions/export-csv
-   * Exporta todas las transacciones del usuario en formato CSV
+   * Exporta las transacciones del usuario en formato CSV (con filtro opcional de fechas y tipo)
    */
   @Get('export-csv')
-  async exportCsv(@Request() req: { user: { userId: string } }) {
-    const csv = await this.transactionsService.exportCsv(req.user.userId);
-    return { csv };
+  exportCsv(
+    @Request() req: { user: { userId: string } },
+    @Query() query: ExportCsvQueryDto,
+  ) {
+    return this.transactionsService.exportCsv(req.user.userId, query);
   }
 
   /** POST /api/v1/transactions */

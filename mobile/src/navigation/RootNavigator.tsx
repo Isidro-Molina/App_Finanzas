@@ -22,6 +22,7 @@ import { AddCategoryScreen } from '../screens/finances/AddCategoryScreen';
 import { ManageCategoriesScreen } from '../screens/finances/ManageCategoriesScreen';
 import { EditProfileScreen } from '../screens/settings/EditProfileScreen';
 import { ChangePasswordScreen } from '../screens/settings/ChangePasswordScreen';
+import { DeleteAccountScreen } from '../screens/settings/DeleteAccountScreen';
 
 import { TrendingUp, UsersRound, Bell, Settings, UserRound } from 'lucide-react-native';
 
@@ -185,6 +186,11 @@ export const RootNavigator = () => {
           <RootStack.Screen
             name="ChangePassword"
             component={ChangePasswordScreen}
+            options={{ presentation: 'modal' }}
+          />
+          <RootStack.Screen
+            name="DeleteAccount"
+            component={DeleteAccountScreen}
             options={{ presentation: 'modal' }}
           />
         </>

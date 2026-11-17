@@ -6,6 +6,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { AuthProvider } from './src/context/AuthContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { DialogProvider } from './src/context/DialogContext';
+import { CategoriesProvider } from './src/context/CategoriesContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 
 import {
@@ -26,10 +28,14 @@ function AppInner() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <NavigationContainer>
-          <StatusBar style={isDark ? 'light' : 'dark'} />
-          <RootNavigator />
-        </NavigationContainer>
+        <CategoriesProvider>
+          <DialogProvider>
+            <NavigationContainer>
+              <StatusBar style={isDark ? 'light' : 'dark'} />
+              <RootNavigator />
+            </NavigationContainer>
+          </DialogProvider>
+        </CategoriesProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

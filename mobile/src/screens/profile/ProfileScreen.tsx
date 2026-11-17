@@ -1,13 +1,64 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, ScrollView, RefreshControl, Pressable } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, Pressable, TouchableOpacity } from 'react-native';
 import { Spinner } from '../../components/Spinner';
 import { useAuth } from '../../context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
+import { useDialog } from '../../context/DialogContext';
 import { useFocusEffect } from '@react-navigation/native';
 import apiClient from '../../api/client';
-import { Trophy, BarChart2, Users } from 'lucide-react-native';
+import {
+  Trophy,
+  BarChart2,
+  Users,
+  Sparkles,
+  Zap,
+  Globe,
+  Tag,
+  Flame,
+  Award,
+  TrendingUp,
+  Crown,
+  Sliders,
+  Target,
+  ShieldCheck,
+  UserPlus,
+  CheckCircle2,
+} from 'lucide-react-native';
 import { formatCurrency } from '../../utils/currency';
+
+interface AchievementItem {
+  code: string;
+  title: string;
+  description: string;
+  category: 'HABIT' | 'SAVINGS' | 'BUDGET' | 'COMMUNITY';
+  icon: string;
+  color: string;
+  unlocked: boolean;
+  unlockedAt: string | null;
+  progress: number;
+  target: number;
+  progressLabel: string;
+}
+
+const ACHIEVEMENT_ICONS: Record<string, any> = {
+  Sparkles,
+  BarChart2,
+  Zap,
+  Globe,
+  Tag,
+  Trophy,
+  Flame,
+  Award,
+  TrendingUp,
+  Crown,
+  Sliders,
+  Target,
+  ShieldCheck,
+  Users,
+  UserPlus,
+  CheckCircle2,
+};
 
 const formatCompactExpense = (val: number): string => {
   if (!val || val <= 0) return '—';
@@ -54,9 +105,12 @@ const FULL_MONTHS = [
 export const ProfileScreen = () => {
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
+  const { showAlert } = useDialog();
 
   const [groupCount, setGroupCount] = useState(0);
   const [monthlySeries, setMonthlySeries] = useState<MonthlySeriesItem[]>([]);
+  const [achievements, setAchievements] = useState<AchievementItem[]>([]);
+  const [achievementFilter, setAchievementFilter] = useState<'ALL' | 'UNLOCKED' | 'IN_PROGRESS'>('ALL');
   const [selectedIndex, setSelectedIndex] = useState<number>(5);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -91,9 +145,10 @@ export const ProfileScreen = () => {
         });
       }
 
-      const [groupsRes, currentTxRes, ...summariesData] = await Promise.all([
+      const [groupsRes, currentTxRes, achievementsRes, ...summariesData] = await Promise.all([
         apiClient.get('/groups'),
         apiClient.get(`/transactions?month=${currentMonth}&year=${currentYear}`).catch(() => ({ data: [] })),
+        apiClient.get('/users/me/achievements').catch(() => ({ data: [] })),
         ...monthRequests.map((req) =>
           apiClient
             .get(`/transactions/summary?month=${req.m}&year=${req.y}`)
@@ -139,6 +194,7 @@ export const ProfileScreen = () => {
       }));
 
       setGroupCount(Array.isArray(groupsRes.data) ? groupsRes.data.length : 0);
+      setAchievements(Array.isArray(achievementsRes.data) ? achievementsRes.data : []);
       setMonthlySeries(normalizedSeries);
       setSelectedIndex((prev) => (prev >= 0 && prev < normalizedSeries.length ? prev : normalizedSeries.length - 1));
     } catch (e) {
@@ -165,42 +221,35 @@ export const ProfileScreen = () => {
   const currentTxCount = currentMonthItem?.expenseCount ?? 0;
   const selectedTxCount = selectedMonth?.expenseCount ?? 0;
 
-  const BADGES = [
-    {
-      Icon: Trophy,
-      label: 'Ahorrador',
-      desc:
-        selectedMonth && !selectedMonth.isCurrent
-          ? selectedMonthSaved > 0
-            ? `Cerraste ${selectedMonth.fullMonthName.toLowerCase()} con saldo positivo`
-            : `Sin ahorro al cierre de ${selectedMonth.fullMonthName.toLowerCase()}`
-          : closedSavedMonths.length > 0
-            ? `Cerraste ${closedSavedMonths.length} mes(es) con saldo positivo`
-            : 'Se calcula al finalizar el mes en curso',
-      unlocked:
-        selectedMonth && !selectedMonth.isCurrent
-          ? selectedMonthSaved > 0
-          : closedSavedMonths.length > 0,
-      color: '#F59E0B',
-    },
-    {
-      Icon: BarChart2,
-      label: 'Constante',
-      desc:
-        currentTxCount >= 5
-          ? `${currentTxCount} gastos registrados este mes`
-          : `${currentTxCount}/5 gastos para desbloquear`,
-      unlocked: currentTxCount >= 5,
-      color: '#2563EB',
-    },
-    {
-      Icon: Users,
-      label: 'Comunidad',
-      desc: groupCount >= 1 ? `Participás en ${groupCount} grupo(s)` : 'Unite o creá tu primer grupo',
-      unlocked: groupCount >= 1,
-      color: '#059669',
-    },
-  ];
+  const unlockedCount = achievements.filter((a) => a.unlocked).length;
+  const totalAchievements = achievements.length || 16;
+  const filteredAchievements = achievements.filter((a) => {
+    if (achievementFilter === 'UNLOCKED') return a.unlocked;
+    if (achievementFilter === 'IN_PROGRESS') return !a.unlocked;
+    return true;
+  });
+
+  const handleOpenAchievement = (item: AchievementItem) => {
+    const IconComp = ACHIEVEMENT_ICONS[item.icon] || Trophy;
+    const dateStr = item.unlockedAt
+      ? new Date(item.unlockedAt).toLocaleDateString('es-AR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        })
+      : null;
+
+    const detailMsg = item.unlocked
+      ? `${item.description}\n\nEstado: Completado${dateStr ? ` el ${dateStr}` : ''}.`
+      : `${item.description}\n\nAvance actual: ${item.progressLabel}.`;
+
+    void showAlert({
+      title: item.title,
+      message: detailMsg,
+      icon: <IconComp size={24} color={item.color} />,
+      iconBgColor: `${item.color}18`,
+    });
+  };
 
   const maxVal = Math.max(...monthlySeries.map((m) => m.totalExpense), 1);
 
@@ -414,44 +463,124 @@ export const ProfileScreen = () => {
 
         {/* Achievements / Logros */}
         <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
-          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: colors.textPrimary, marginBottom: 12 }}>
-            Logros
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 15, color: colors.textPrimary }}>
+              Logros
+            </Text>
+            <View style={{ backgroundColor: colors.brandLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99 }}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.brand }}>
+                {unlockedCount} / {totalAchievements} desbloqueados
+              </Text>
+            </View>
+          </View>
+
+          {/* Barra general de logros */}
+          <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.bgSubtle, overflow: 'hidden', marginBottom: 12 }}>
+            <View
+              style={{
+                width: `${Math.round((unlockedCount / Math.max(1, totalAchievements)) * 100)}%`,
+                height: '100%',
+                backgroundColor: colors.brand,
+                borderRadius: 3,
+              }}
+            />
+          </View>
+
+          {/* Filtros */}
+          <View style={{ flexDirection: 'row', backgroundColor: colors.bgCard, padding: 4, borderRadius: 12, gap: 4, marginBottom: 12 }}>
+            {(
+              [
+                { key: 'ALL', label: 'Todos' },
+                { key: 'UNLOCKED', label: 'Completados' },
+                { key: 'IN_PROGRESS', label: 'En progreso' },
+              ] as const
+            ).map((tab) => {
+              const selected = achievementFilter === tab.key;
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  onPress={() => setAchievementFilter(tab.key)}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 7,
+                    borderRadius: 9,
+                    alignItems: 'center',
+                    backgroundColor: selected ? colors.brand : 'transparent',
+                  }}
+                >
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: selected ? '#FFFFFF' : colors.textMuted }}>
+                    {tab.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
           <View style={{ gap: 8 }}>
-            {BADGES.map((b) => (
-              <View
-                key={b.label}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: colors.bgCard,
-                  borderRadius: 14,
-                  padding: 14,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: isDark ? 0.2 : 0.05,
-                  shadowRadius: 3,
-                  elevation: 1,
-                  gap: 12,
-                  opacity: b.unlocked ? 1 : 0.7,
-                }}
-              >
-                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: `${b.color}18`, alignItems: 'center', justifyContent: 'center' }}>
-                  <b.Icon size={22} color={b.color} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.textPrimary }}>{b.label}</Text>
-                    {b.unlocked && (
-                      <View style={{ backgroundColor: '#10B98120', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: '#10B981' }}>Completado</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted }}>{b.desc}</Text>
-                </View>
+            {filteredAchievements.length === 0 ? (
+              <View style={{ backgroundColor: colors.bgCard, borderRadius: 14, padding: 18, alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textMuted }}>
+                  {achievementFilter === 'UNLOCKED'
+                    ? 'Todavía no completaste logros.'
+                    : '¡Completaste todos los logros disponibles!'}
+                </Text>
               </View>
-            ))}
+            ) : (
+              filteredAchievements.map((b) => {
+                const IconComp = ACHIEVEMENT_ICONS[b.icon] || Trophy;
+                const pct = Math.min(100, Math.round((b.progress / Math.max(1, b.target)) * 100));
+                return (
+                  <TouchableOpacity
+                    key={b.code}
+                    activeOpacity={0.75}
+                    onPress={() => handleOpenAchievement(b)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: colors.bgCard,
+                      borderRadius: 14,
+                      padding: 14,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: isDark ? 0.2 : 0.05,
+                      shadowRadius: 3,
+                      elevation: 1,
+                      gap: 12,
+                      opacity: b.unlocked ? 1 : 0.78,
+                    }}
+                  >
+                    <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: `${b.color}18`, alignItems: 'center', justifyContent: 'center' }}>
+                      <IconComp size={22} color={b.color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.textPrimary }}>
+                          {b.title}
+                        </Text>
+                        {b.unlocked && (
+                          <View style={{ backgroundColor: '#10B98120', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: '#10B981' }}>Completado</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted, marginBottom: b.unlocked ? 0 : 6 }}>
+                        {b.description}
+                      </Text>
+                      {!b.unlocked && (
+                        <View style={{ gap: 4 }}>
+                          <View style={{ height: 5, borderRadius: 3, backgroundColor: colors.bgSubtle, overflow: 'hidden' }}>
+                            <View style={{ width: `${pct}%`, height: '100%', backgroundColor: b.color, borderRadius: 3 }} />
+                          </View>
+                          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: colors.textMuted }}>
+                            {b.progressLabel}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })
+            )}
           </View>
         </View>
 

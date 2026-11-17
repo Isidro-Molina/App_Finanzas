@@ -3,8 +3,10 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { TransactionType } from '@prisma/client';
 
 export class UpdateCategoryDto {
@@ -20,6 +22,11 @@ export class UpdateCategoryDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(10)
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim().toUpperCase() : value,
+  )
+  @Matches(/^#[0-9A-F]{6}$/, {
+    message: 'El color debe tener formato hexadecimal #RRGGBB',
+  })
   icon?: string;
 }

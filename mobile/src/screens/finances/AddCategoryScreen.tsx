@@ -9,32 +9,21 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import apiClient from '../../api/client';
-import { ArrowLeft, Check } from 'lucide-react-native';
+import { ArrowLeft } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { useCategories } from '../../context/CategoriesContext';
 import { Spinner } from '../../components/Spinner';
-
-const COLOR_OPTIONS = [
-  '#2563EB', // Azul
-  '#7C3AED', // Violeta
-  '#DB2777', // Rosa
-  '#059669', // Verde
-  '#D97706', // Ámbar
-  '#0891B2', // Cyan
-  '#DC2626', // Rojo
-  '#65A30D', // Lima
-  '#9333EA', // Púrpura
-  '#0F172A', // Negro
-  '#64748B', // Gris
-  '#EA580C', // Naranja
-];
+import { ColorPicker } from '../../components/ColorPicker';
+import { CATEGORY_PRESET_COLORS } from '../../utils/categoryColors';
 
 export const AddCategoryScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { colors } = useTheme();
+  const { refreshCategories } = useCategories();
 
   const [name, setName] = useState('');
   const [type, setType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
-  const [selectedColor, setSelectedColor] = useState(COLOR_OPTIONS[0]);
+  const [selectedColor, setSelectedColor] = useState(CATEGORY_PRESET_COLORS[0]);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
@@ -50,6 +39,7 @@ export const AddCategoryScreen: React.FC = () => {
         type,
         icon: selectedColor, // guardamos el color hex en el campo icon
       });
+      await refreshCategories();
       navigation.goBack();
     } catch (e: any) {
       const msg = e.response?.data?.message || 'Error al guardar la categoría';
@@ -148,31 +138,11 @@ export const AddCategoryScreen: React.FC = () => {
             </Text>
           </View>
 
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-            {COLOR_OPTIONS.map((color) => (
-              <TouchableOpacity
-                key={color}
-                onPress={() => setSelectedColor(color)}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: color,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderWidth: selectedColor === color ? 3 : 0,
-                  borderColor: '#fff',
-                  shadowColor: color,
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: selectedColor === color ? 0.5 : 0,
-                  shadowRadius: 8,
-                  elevation: selectedColor === color ? 4 : 0,
-                }}
-              >
-                {selectedColor === color && <Check size={18} color="#fff" strokeWidth={3} />}
-              </TouchableOpacity>
-            ))}
-          </View>
+          <ColorPicker
+            value={selectedColor}
+            onChange={setSelectedColor}
+            disabled={loading}
+          />
         </View>
 
         {/* Submit */}

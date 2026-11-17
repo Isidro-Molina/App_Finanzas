@@ -1,0 +1,12 @@
+appId: com.finova.app
+---
+- launchApp
+- tapOn: "Ajustes"
+- tapOn: "Gestionar categorías"
+- assertVisible: "Categorías base"
+- tapOn:
+    text: "Comida"
+- back
+- tapOn: "Finanzas"
+- tapOn: "+"
+- assertNotVisible: "Comida"
