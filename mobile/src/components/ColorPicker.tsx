@@ -14,12 +14,11 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Check, AlertTriangle } from 'lucide-react-native';
+import { Check } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { CATEGORY_PRESET_COLORS } from '../utils/categoryColors';
 import {
   HsvColor,
-  getContrastRatio,
   hexToRgb,
   hsvToRgb,
   isValidHex,
@@ -88,7 +87,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
   onChange,
   disabled = false,
 }) => {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const isPreset = CATEGORY_PRESET_COLORS.includes(value.toUpperCase());
 
   const [showCustom, setShowCustom] = useState(!isPreset);
@@ -99,7 +98,11 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
   const [hexInput, setHexInput] = useState(value.toUpperCase());
   const [sliderWidth, setSliderWidth] = useState(240);
 
-  // Sincronizar cuando el padre cambia value (ej: al abrir editar otra categoria)
+  const wheelRef = useRef<View>(null);
+  const wheelOriginRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const sliderRef = useRef<View>(null);
+  const sliderBoxRef = useRef<{ x: number; w: number }>({ x: 0, w: 240 });
+
   useEffect(() => {
     const norm = normalizeHex(value);
     if (isValidHex(norm)) {
@@ -140,7 +143,9 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
   const hsvRef = useRef(hsv);
   hsvRef.current = hsv;
 
-  const updateWheelFromPoint = (x: number, y: number) => {
+  const updateWheelFromPage = (pageX: number, pageY: number) => {
+    const x = pageX - wheelOriginRef.current.x;
+    const y = pageY - wheelOriginRef.current.y;
     const dx = x - WHEEL_RADIUS;
     const dy = y - WHEEL_RADIUS;
     const dist = Math.min(WHEEL_RADIUS, Math.sqrt(dx * dx + dy * dy));
@@ -155,22 +160,26 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
       PanResponder.create({
         onStartShouldSetPanResponder: () => !disabled,
         onMoveShouldSetPanResponder: () => !disabled,
+        onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
         onPanResponderGrant: (evt) => {
-          updateWheelFromPoint(evt.nativeEvent.locationX, evt.nativeEvent.locationY);
+          const { pageX, pageY } = evt.nativeEvent;
+          wheelRef.current?.measureInWindow((wx, wy) => {
+            wheelOriginRef.current = { x: wx, y: wy };
+            updateWheelFromPage(pageX, pageY);
+          });
         },
         onPanResponderMove: (evt) => {
-          updateWheelFromPoint(evt.nativeEvent.locationX, evt.nativeEvent.locationY);
+          updateWheelFromPage(evt.nativeEvent.pageX, evt.nativeEvent.pageY);
         },
       }),
     [disabled],
   );
 
-  const sliderWidthRef = useRef(sliderWidth);
-  sliderWidthRef.current = sliderWidth;
-
-  const updateBrightnessFromX = (x: number) => {
-    const w = Math.max(1, sliderWidthRef.current);
-    const v = Math.max(0.05, Math.min(1, x / w));
+  const updateBrightnessFromPage = (pageX: number) => {
+    const { x: sx, w } = sliderBoxRef.current;
+    const relX = pageX - sx;
+    const v = Math.max(0.05, Math.min(1, relX / Math.max(1, w)));
     applyHsv({ h: hsvRef.current.h, s: hsvRef.current.s, v });
   };
 
@@ -179,11 +188,19 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
       PanResponder.create({
         onStartShouldSetPanResponder: () => !disabled,
         onMoveShouldSetPanResponder: () => !disabled,
+        onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
         onPanResponderGrant: (evt) => {
-          updateBrightnessFromX(evt.nativeEvent.locationX);
+          const { pageX } = evt.nativeEvent;
+          sliderRef.current?.measureInWindow((sx, _sy, sw) => {
+            if (sw > 0) {
+              sliderBoxRef.current = { x: sx, w: sw };
+            }
+            updateBrightnessFromPage(pageX);
+          });
         },
         onPanResponderMove: (evt) => {
-          updateBrightnessFromX(evt.nativeEvent.locationX);
+          updateBrightnessFromPage(evt.nativeEvent.pageX);
         },
       }),
     [disabled],
@@ -210,7 +227,6 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
   );
   const fullBrightnessHex = rgbToHex(hsvToRgb({ h: hsv.h, s: hsv.s, v: 1 }));
   const currentRgb = hexToRgb(value) ?? { r: 37, g: 99, b: 235 };
-  const lowContrast = getContrastRatio(value, colors.bgCard) < 2.2;
 
   return (
     <View style={{ gap: 14 }}>
@@ -280,6 +296,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
           {/* Rueda HSV */}
           <View style={{ alignItems: 'center' }}>
             <View
+              ref={wheelRef}
               {...wheelPan.panHandlers}
               style={{
                 width: WHEEL_SIZE,
@@ -288,7 +305,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                 overflow: 'hidden',
               }}
             >
-              <Svg width={WHEEL_SIZE} height={WHEEL_SIZE}>
+              <Svg width={WHEEL_SIZE} height={WHEEL_SIZE} pointerEvents="none">
                 <Defs>
                   <RadialGradient id="satGrad" cx="50%" cy="50%" r="50%">
                     <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="1" />
@@ -331,23 +348,30 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
               Brillo
             </Text>
             <View
-              onLayout={(e) => setSliderWidth(e.nativeEvent.layout.width)}
+              ref={sliderRef}
+              onLayout={(e) => {
+                const w = e.nativeEvent.layout.width;
+                setSliderWidth(w);
+                sliderBoxRef.current.w = w;
+              }}
               {...brightnessPan.panHandlers}
-              style={{ height: 24, justifyContent: 'center' }}
+              style={{ height: 28, justifyContent: 'center' }}
             >
               <LinearGradient
+                pointerEvents="none"
                 colors={['#000000', fullBrightnessHex]}
                 start={{ x: 0, y: 0.5 }}
                 end={{ x: 1, y: 0.5 }}
                 style={{ height: 14, borderRadius: 7, borderWidth: 1, borderColor: colors.border }}
               />
               <View
+                pointerEvents="none"
                 style={{
                   position: 'absolute',
-                  left: Math.max(0, Math.min(sliderWidth - 20, hsv.v * sliderWidth - 10)),
-                  width: 20,
-                  height: 20,
-                  borderRadius: 10,
+                  left: Math.max(0, Math.min(sliderWidth - 22, hsv.v * sliderWidth - 11)),
+                  width: 22,
+                  height: 22,
+                  borderRadius: 11,
                   backgroundColor: value,
                   borderWidth: 2.5,
                   borderColor: '#FFFFFF',
@@ -416,25 +440,6 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
               </View>
             ))}
           </View>
-        </View>
-      ) : null}
-
-      {lowContrast ? (
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-            backgroundColor: isDark ? '#422006' : '#FFFBEB',
-            borderRadius: 10,
-            paddingHorizontal: 10,
-            paddingVertical: 8,
-          }}
-        >
-          <AlertTriangle size={14} color="#D97706" />
-          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: isDark ? '#FDE68A' : '#92400E', flex: 1 }}>
-            Este color tiene bajo contraste con el fondo actual y puede costar leerlo.
-          </Text>
         </View>
       ) : null}
     </View>

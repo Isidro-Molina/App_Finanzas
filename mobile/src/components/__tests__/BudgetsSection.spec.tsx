@@ -29,6 +29,13 @@ jest.mock('../../context/ThemeContext', () => ({
   }),
 }));
 
+jest.mock('../../context/DialogContext', () => ({
+  useDialog: () => ({
+    showAlert: jest.fn().mockResolvedValue(undefined),
+    showConfirm: jest.fn().mockResolvedValue(true),
+  }),
+}));
+
 jest.mock('lucide-react-native', () => ({
   Plus: () => null,
   Trash2: () => null,

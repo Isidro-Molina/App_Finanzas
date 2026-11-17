@@ -433,6 +433,7 @@ export const AddTransactionScreen: React.FC = () => {
               style={{
                 flex: 1,
                 fontFamily: 'Outfit_700Bold',
+                fontVariant: ['tabular-nums'],
                 fontSize: 28,
                 color: colors.textPrimary,
                 textAlign: 'right',
@@ -539,6 +540,7 @@ export const AddTransactionScreen: React.FC = () => {
                     placeholderTextColor={colors.textMuted}
                     style={{
                       fontFamily: 'Inter_600SemiBold',
+                      fontVariant: ['tabular-nums'],
                       fontSize: 13,
                       color: colors.textPrimary,
                       minWidth: 56,

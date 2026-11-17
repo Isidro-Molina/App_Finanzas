@@ -379,6 +379,7 @@ export const AddGroupExpenseScreen: React.FC = () => {
               style={{
                 flex: 1,
                 fontFamily: 'Outfit_700Bold',
+                fontVariant: ['tabular-nums'],
                 fontSize: 28,
                 color: colors.textPrimary,
                 textAlign: 'right',
@@ -484,6 +485,7 @@ export const AddGroupExpenseScreen: React.FC = () => {
                     placeholderTextColor={colors.textMuted}
                     style={{
                       fontFamily: 'Inter_600SemiBold',
+                      fontVariant: ['tabular-nums'],
                       fontSize: 13,
                       color: colors.textPrimary,
                       minWidth: 56,
@@ -655,7 +657,7 @@ export const AddGroupExpenseScreen: React.FC = () => {
                             keyboardType="decimal-pad"
                             placeholder="0"
                             placeholderTextColor={colors.textMuted}
-                            style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.textPrimary, minWidth: 52, padding: 0 }}
+                            style={{ fontFamily: 'Inter_600SemiBold', fontVariant: ['tabular-nums'], fontSize: 13, color: colors.textPrimary, minWidth: 52, padding: 0 }}
                           />
                         </View>
                       )

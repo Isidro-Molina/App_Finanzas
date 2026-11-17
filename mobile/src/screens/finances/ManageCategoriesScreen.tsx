@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  Alert,
   Modal,
   TextInput,
   RefreshControl,
@@ -32,7 +31,7 @@ interface Category {
 export const ManageCategoriesScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { colors } = useTheme();
-  const { toast } = useDialog();
+  const { toast, showAlert, showConfirm } = useDialog();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,7 +78,7 @@ export const ManageCategoriesScreen: React.FC = () => {
 
   const handleSave = async () => {
     if (!editName.trim()) {
-      Alert.alert('Nombre requerido', 'Ingresá un nombre para la categoría');
+      await showAlert({ title: 'Nombre requerido', message: 'Ingresá un nombre para la categoría.' });
       return;
     }
     setSaving(true);
@@ -101,33 +100,28 @@ export const ManageCategoriesScreen: React.FC = () => {
       setModalVisible(false);
     } catch (e: any) {
       const msg = e.response?.data?.message || 'Error al guardar';
-      Alert.alert('Error', Array.isArray(msg) ? msg[0] : msg);
+      await showAlert({ title: 'Error', message: Array.isArray(msg) ? msg[0] : msg });
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = (cat: Category) => {
-    Alert.alert(
-      'Eliminar categoría',
-      `¿Estás seguro de que querés eliminar "${cat.name}"? Esta acción no se puede deshacer.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await apiClient.delete(`/categories/${cat.id}`);
-              fetchCategories();
-            } catch (e: any) {
-              const msg = e.response?.data?.message || 'Error al eliminar';
-              Alert.alert('Error', Array.isArray(msg) ? msg[0] : msg);
-            }
-          },
-        },
-      ]
-    );
+  const handleDelete = async (cat: Category) => {
+    const confirmed = await showConfirm({
+      title: 'Eliminar categoría',
+      message: `¿Estás seguro de que querés eliminar "${cat.name}"? Esta acción no se puede deshacer.`,
+      confirmText: 'Eliminar',
+      destructive: true,
+    });
+    if (!confirmed) return;
+
+    try {
+      await apiClient.delete(`/categories/${cat.id}`);
+      fetchCategories();
+    } catch (e: any) {
+      const msg = e.response?.data?.message || 'Error al eliminar';
+      await showAlert({ title: 'Error', message: Array.isArray(msg) ? msg[0] : msg });
+    }
   };
 
   const handleToggleVisibility = async (cat: Category) => {
@@ -303,7 +297,7 @@ export const ManageCategoriesScreen: React.FC = () => {
                       key={cat.id}
                       style={{ backgroundColor: colors.bgCard, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 3, elevation: 1 }}
                     >
-                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, opacity: isHidden ? 0.35 : 0.55 }}>
+                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, opacity: isHidden ? 0.4 : 1 }}>
                         <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: `${catColor}18`, alignItems: 'center', justifyContent: 'center' }}>
                           <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: catColor }} />
                         </View>

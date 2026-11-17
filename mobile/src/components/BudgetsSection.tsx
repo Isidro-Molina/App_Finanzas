@@ -7,11 +7,11 @@ import {
   Pressable,
   TextInput,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { Plus, Trash2, X } from 'lucide-react-native';
 import apiClient from '../api/client';
 import { useTheme } from '../context/ThemeContext';
+import { useDialog } from '../context/DialogContext';
 import { formatCurrency } from '../utils/currency';
 import { formatAmountInput, parseAmountInput } from '../utils/amountInput';
 import { Spinner } from './Spinner';
@@ -41,6 +41,7 @@ interface Props {
 
 export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChanged }) => {
   const { colors, isDark } = useTheme();
+  const { showAlert, showConfirm } = useDialog();
 
   const [isOpen, setIsOpen] = useState(false);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
@@ -66,11 +67,11 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
   const handleSave = async () => {
     const value = parseAmountInput(amount);
     if (!categoryId) {
-      Alert.alert('Falta la categoría', 'Elegí una categoría para el presupuesto.');
+      await showAlert({ title: 'Falta la categoría', message: 'Elegí una categoría para el presupuesto.' });
       return;
     }
     if (isNaN(value) || value <= 0) {
-      Alert.alert('Monto inválido', 'Ingresá un monto mayor a cero.');
+      await showAlert({ title: 'Monto inválido', message: 'Ingresá un monto mayor a cero.' });
       return;
     }
     setSaving(true);
@@ -80,32 +81,31 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
       setIsOpen(false);
     } catch (e: any) {
       const msg = e.response?.data?.message || 'No se pudo guardar el presupuesto';
-      Alert.alert('Error', Array.isArray(msg) ? msg[0] : msg);
+      await showAlert({ title: 'Error', message: Array.isArray(msg) ? msg[0] : msg });
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = (b: BudgetItem) => {
-    Alert.alert('Eliminar presupuesto', `¿Eliminar el presupuesto de ${b.category.name}?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: async () => {
-          setDeletingId(b.id);
-          try {
-            await apiClient.delete(`/budgets/${b.id}`);
-            await Promise.resolve(onChanged());
-          } catch (e: any) {
-            const msg = e.response?.data?.message || 'No se pudo eliminar el presupuesto';
-            Alert.alert('Error', Array.isArray(msg) ? msg[0] : msg);
-          } finally {
-            setDeletingId(null);
-          }
-        },
-      },
-    ]);
+  const handleDelete = async (b: BudgetItem) => {
+    const confirmed = await showConfirm({
+      title: 'Eliminar límite',
+      message: `¿Querés eliminar el límite de gasto de "${b.category.name}"?`,
+      confirmText: 'Eliminar',
+      destructive: true,
+    });
+    if (!confirmed) return;
+
+    setDeletingId(b.id);
+    try {
+      await apiClient.delete(`/budgets/${b.id}`);
+      await Promise.resolve(onChanged());
+    } catch (e: any) {
+      const msg = e.response?.data?.message || 'No se pudo eliminar el presupuesto';
+      await showAlert({ title: 'Error', message: Array.isArray(msg) ? msg[0] : msg });
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -132,8 +132,14 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
       ) : (
         budgets.map((b) => {
           const over = b.pctUsed >= 100;
-          const warn = b.pctUsed >= 80;
-          const barColor = over ? '#EF4444' : warn ? '#F59E0B' : colors.brand;
+          const barColor =
+            b.pctUsed <= 25
+              ? '#10B981'
+              : b.pctUsed <= 55
+                ? '#EAB308'
+                : b.pctUsed <= 80
+                  ? '#F97316'
+                  : '#EF4444';
           return (
             <View key={b.id} style={{ backgroundColor: colors.bgCard, borderRadius: 14, padding: 14, marginBottom: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: isDark ? 0.2 : 0.05, shadowRadius: 3, elevation: 1 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -222,7 +228,7 @@ export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChange
               placeholder="Ej: 50.000"
               placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
-              style={{ borderWidth: 1.5, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter_400Regular', color: colors.textPrimary, backgroundColor: colors.bgInput, marginBottom: 18, opacity: saving ? 0.6 : 1 }}
+              style={{ borderWidth: 1.5, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter_400Regular', fontVariant: ['tabular-nums'], color: colors.textPrimary, backgroundColor: colors.bgInput, marginBottom: 18, opacity: saving ? 0.6 : 1 }}
             />
 
             <TouchableOpacity
