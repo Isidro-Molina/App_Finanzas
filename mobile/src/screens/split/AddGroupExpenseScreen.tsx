@@ -12,6 +12,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import apiClient from '../../api/client';
 import { ArrowLeft, Calendar, Clock, Users, Check, RefreshCw } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { useCategories } from '../../context/CategoriesContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { formatCurrency } from '../../utils/currency';
 import { Spinner } from '../../components/Spinner';
@@ -67,7 +68,8 @@ export const AddGroupExpenseScreen: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const { categories: allCategories } = useCategories();
+  const categories = allCategories.filter((c) => c.type === 'EXPENSE' && !c.isHidden);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMembers, setLoadingMembers] = useState(true);
@@ -94,9 +96,8 @@ export const AddGroupExpenseScreen: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [membersRes, catsRes, fetchedRates] = await Promise.all([
+        const [membersRes, fetchedRates] = await Promise.all([
           apiClient.get(`/groups/${groupId}`),
-          apiClient.get('/categories'),
           fetchExchangeRates(),
         ]);
         setRatesMap(fetchedRates);
@@ -108,25 +109,21 @@ export const AddGroupExpenseScreen: React.FC = () => {
           included: true,
           amount: '',
         })));
-
-        const expenseCats = (catsRes.data as Category[]).filter(
-          (c) => c.type === 'EXPENSE' && !c.isHidden,
-        );
-        setCategories(expenseCats);
-        const otros = expenseCats.find((c) => c.name === 'Otros');
-        if (otros) {
-          setSelectedCategoryId(otros.id);
-        } else if (expenseCats.length > 0) {
-          setSelectedCategoryId(expenseCats[0].id);
-        }
       } catch (e) {
-        console.error('Error loading members or categories:', e);
+        console.error('Error loading members:', e);
       } finally {
         setLoadingMembers(false);
       }
     };
     fetchData();
   }, [groupId]);
+
+  useEffect(() => {
+    if (!selectedCategoryId && categories.length > 0) {
+      const otros = categories.find((c) => c.name === 'Otros');
+      setSelectedCategoryId(otros ? otros.id : categories[0].id);
+    }
+  }, [categories, selectedCategoryId]);
 
   const handleSelectRateOption = (code: RateOptionCode) => {
     setRateOption(code);

@@ -36,6 +36,15 @@ jest.mock('../../context/DialogContext', () => ({
   }),
 }));
 
+jest.mock('../../context/CategoriesContext', () => ({
+  useCategories: () => ({
+    categories: [{ id: 'cat-1', name: 'Comida', type: 'EXPENSE', userId: null, isHidden: false }],
+    loading: false,
+    refreshCategories: jest.fn().mockResolvedValue([]),
+    updateCategoriesCache: jest.fn(),
+  }),
+}));
+
 jest.mock('lucide-react-native', () => ({
   Plus: () => null,
   Trash2: () => null,

@@ -12,6 +12,7 @@ import { Plus, Trash2, X } from 'lucide-react-native';
 import apiClient from '../api/client';
 import { useTheme } from '../context/ThemeContext';
 import { useDialog } from '../context/DialogContext';
+import { useCategories } from '../context/CategoriesContext';
 import { formatCurrency } from '../utils/currency';
 import { formatAmountInput, parseAmountInput } from '../utils/amountInput';
 import { Spinner } from './Spinner';
@@ -42,25 +43,22 @@ interface Props {
 export const BudgetsSection: React.FC<Props> = ({ budgets, month, year, onChanged }) => {
   const { colors, isDark } = useTheme();
   const { showAlert, showConfirm } = useDialog();
+  const { categories: allCategories, refreshCategories } = useCategories();
 
   const [isOpen, setIsOpen] = useState(false);
-  const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const openModal = async () => {
+  const categories = allCategories.filter((c) => c.type === 'EXPENSE' && !c.isHidden);
+
+  const openModal = () => {
     setCategoryId(null);
     setAmount('');
     setIsOpen(true);
-    try {
-      const res = await apiClient.get('/categories');
-      setCategories(
-        (res.data as CategoryOption[]).filter((c) => c.type === 'EXPENSE' && !c.isHidden),
-      );
-    } catch (e) {
-      console.error('Error cargando categorías:', e);
+    if (allCategories.length === 0) {
+      void refreshCategories();
     }
   };
 

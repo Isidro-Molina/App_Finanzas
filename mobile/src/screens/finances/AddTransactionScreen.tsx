@@ -12,6 +12,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import apiClient from '../../api/client';
 import { ArrowLeft, Calendar, Clock, Trash2, RefreshCw } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { useCategories } from '../../context/CategoriesContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { formatCurrency } from '../../utils/currency';
 import { Spinner } from '../../components/Spinner';
@@ -93,13 +94,12 @@ export const AddTransactionScreen: React.FC = () => {
   const [maxPickerDate] = useState(() => new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const { categories, loading: fetchingCategories } = useCategories();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     transaction?.categoryId || transaction?.category?.id || null
   );
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [fetchingCategories, setFetchingCategories] = useState(true);
 
   const formattedDate = selectedDate.toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
   const formattedTime = selectedDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -119,10 +119,18 @@ export const AddTransactionScreen: React.FC = () => {
 
   useFocusEffect(
     React.useCallback(() => {
-      fetchCategories();
       loadRates(rateOption);
     }, [])
   );
+
+  React.useEffect(() => {
+    if (!selectedCategoryId && categories.length > 0) {
+      const firstMatching = categories.find((c) => c.type === type && !c.isHidden);
+      if (firstMatching) {
+        setSelectedCategoryId(firstMatching.id);
+      }
+    }
+  }, [categories, selectedCategoryId, type]);
 
   const handleSelectRateOption = (code: RateOptionCode) => {
     setRateOption(code);
@@ -156,23 +164,6 @@ export const AddTransactionScreen: React.FC = () => {
           ? +(parsedInputAmount / parsedExchangeRate).toFixed(2)
           : 0
         : parsedInputAmount;
-
-  const fetchCategories = async () => {
-    try {
-      const res = await apiClient.get('/categories');
-      setCategories(res.data);
-      if (!selectedCategoryId) {
-        const firstMatching = res.data.find((c: Category) => c.type === type && !c.isHidden);
-        if (firstMatching) {
-          setSelectedCategoryId(firstMatching.id);
-        }
-      }
-    } catch (e) {
-      console.error('Error fetching categories:', e);
-    } finally {
-      setFetchingCategories(false);
-    }
-  };
 
   const filteredCategories = categories.filter(
     (c) => c.type === type && (!c.isHidden || (isEditing && c.id === selectedCategoryId)),

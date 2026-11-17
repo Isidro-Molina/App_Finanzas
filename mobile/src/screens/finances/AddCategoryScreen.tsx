@@ -11,6 +11,7 @@ import { useNavigation } from '@react-navigation/native';
 import apiClient from '../../api/client';
 import { ArrowLeft } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { useCategories } from '../../context/CategoriesContext';
 import { Spinner } from '../../components/Spinner';
 import { ColorPicker } from '../../components/ColorPicker';
 import { CATEGORY_PRESET_COLORS } from '../../utils/categoryColors';
@@ -18,6 +19,7 @@ import { CATEGORY_PRESET_COLORS } from '../../utils/categoryColors';
 export const AddCategoryScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { colors } = useTheme();
+  const { refreshCategories } = useCategories();
 
   const [name, setName] = useState('');
   const [type, setType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
@@ -37,6 +39,7 @@ export const AddCategoryScreen: React.FC = () => {
         type,
         icon: selectedColor, // guardamos el color hex en el campo icon
       });
+      await refreshCategories();
       navigation.goBack();
     } catch (e: any) {
       const msg = e.response?.data?.message || 'Error al guardar la categoría';

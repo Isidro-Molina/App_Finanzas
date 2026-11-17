@@ -15,6 +15,7 @@ import { ArrowLeft, Plus, Pencil, Trash2, X, Eye, EyeOff } from 'lucide-react-na
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../context/ThemeContext';
 import { useDialog } from '../../context/DialogContext';
+import { useCategories, CachedCategory } from '../../context/CategoriesContext';
 import { Spinner } from '../../components/Spinner';
 import { ColorPicker } from '../../components/ColorPicker';
 import { CATEGORY_PRESET_COLORS, getCategoryColor } from '../../utils/categoryColors';
@@ -32,9 +33,13 @@ export const ManageCategoriesScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { colors } = useTheme();
   const { toast, showAlert, showConfirm } = useDialog();
+  const {
+    categories,
+    loading,
+    refreshCategories,
+    updateCategoriesCache,
+  } = useCategories();
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filterType, setFilterType] = useState<'ALL' | 'EXPENSE' | 'INCOME'>('ALL');
 
@@ -46,19 +51,15 @@ export const ManageCategoriesScreen: React.FC = () => {
   const [editType, setEditType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
   const [saving, setSaving] = useState(false);
 
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
-      const res = await apiClient.get('/categories');
-      setCategories(res.data);
-    } catch (e) {
-      console.error('Error fetching categories:', e);
+      await refreshCategories();
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [refreshCategories]);
 
-  useFocusEffect(useCallback(() => { fetchCategories(); }, []));
+  useFocusEffect(useCallback(() => { void fetchCategories(); }, [fetchCategories]));
 
   const openCreate = () => {
     setEditingCategory(null);
@@ -137,7 +138,7 @@ export const ManageCategoriesScreen: React.FC = () => {
     }
 
     Haptics.selectionAsync().catch(() => {});
-    setCategories((prev) =>
+    updateCategoriesCache((prev) =>
       prev.map((c) => (c.id === cat.id ? { ...c, isHidden: nextHidden } : c)),
     );
     toast(
@@ -151,7 +152,7 @@ export const ManageCategoriesScreen: React.FC = () => {
         hidden: nextHidden,
       });
     } catch (e: any) {
-      setCategories((prev) =>
+      updateCategoriesCache((prev) =>
         prev.map((c) => (c.id === cat.id ? { ...c, isHidden: !nextHidden } : c)),
       );
       const msg = e.response?.data?.message || 'No se pudo actualizar la visibilidad';
